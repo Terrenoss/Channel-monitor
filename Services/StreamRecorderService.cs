@@ -2,289 +2,520 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.Text;
-using System.Text.RegularExpressions;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Collections.Generic;
 
 namespace AutoStreamRec.Services
 {
     public class StreamRecorderService
     {
-        private const int CheckInterval = 30;
-        private readonly Action<string> _log;
-        private readonly Func<string, Task<bool>> _installDependencyHandler;
+        private readonly string recordingsDir;
+        private readonly Action<string> _logAction;
+        private Process _currentStreamlinkProcess;
+        private DateTime _recordingStartTime;
+        private long _bytesRecorded;
 
-        public StreamRecorderService(Action<string> logAction, Func<string, Task<bool>> installDependencyHandler = null)
+        public StreamRecorderService(Action<string> logAction)
         {
-            _log = logAction;
-            _installDependencyHandler = installDependencyHandler;
+            _logAction = logAction;
+            
+            // Vérification du chemin MyVideos avec fallback
+            string myVideosPath = Environment.GetFolderPath(Environment.SpecialFolder.MyVideos);
+            _logAction($"Chemin MyVideos: {myVideosPath}");
+            
+            if (string.IsNullOrEmpty(myVideosPath)) 
+            {
+                myVideosPath = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                    "Videos");
+            }
+            
+            recordingsDir = Path.Combine(myVideosPath, "recordings");
+            Directory.CreateDirectory(recordingsDir);
+            _logAction($"Dossier d'enregistrement: {recordingsDir}");
         }
 
         public async Task<bool> CheckDependencies()
         {
+            _logAction("Vérification des dépendances...");
+            
+            var dependencies = new Dictionary<string, string>
+            {
+                { "streamlink", "Streamlink (pip install streamlink)" },
+                { "ffmpeg", "FFmpeg (https://ffmpeg.org/)" }
+            };
+
             bool allOk = true;
             
-            if (!await CheckFfmpegExists())
+            foreach (var dep in dependencies)
             {
-                _log("FFmpeg n'est pas détecté");
-                allOk = false;
-            }
-
-            if (!await CheckToolExists("streamlink", "pip install streamlink"))
-            {
-                _log("Streamlink n'est pas détecté");
-                allOk = false;
-            }
-
-            if (!await CheckToolExists("yt-dlp", "pip install yt-dlp"))
-            {
-                _log("yt-dlp n'est pas détecté");
-                allOk = false;
+                string path = FindExecutablePath(dep.Key);
+                if (string.IsNullOrEmpty(path))
+                {
+                    _logAction($"ERREUR: {dep.Value} non trouvé");
+                    allOk = false;
+                }
+                else
+                {
+                    _logAction($"OK: {dep.Key} trouvé à {path}");
+                }
             }
 
             return allOk;
         }
 
-        private async Task<bool> CheckFfmpegExists()
+        public async Task<string> GetLiveStreamUrl(string channelUrl)
         {
+            _logAction($"Détection de live pour: {channelUrl}");
+            
             try
             {
-                Process process = new Process
+                var startInfo = new ProcessStartInfo
                 {
-                    StartInfo = new ProcessStartInfo
-                    {
-                        FileName = "ffmpeg",
-                        Arguments = "-version",
-                        RedirectStandardOutput = true,
-                        RedirectStandardError = true,
-                        UseShellExecute = false,
-                        CreateNoWindow = true,
-                        StandardOutputEncoding = Encoding.UTF8
-                    }
+                    FileName = "streamlink",
+                    Arguments = $"--json \"{channelUrl}\" best",
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    CreateNoWindow = true,
+                    StandardOutputEncoding = Encoding.UTF8
                 };
 
-                StringBuilder output = new StringBuilder();
-                process.OutputDataReceived += (sender, e) => 
-                {
-                    if (!string.IsNullOrEmpty(e.Data))
-                        output.AppendLine(e.Data);
-                };
+                using var process = new Process { StartInfo = startInfo };
+                var output = new StringBuilder();
 
                 process.Start();
-                process.BeginOutputReadLine();
+                string jsonContent = await process.StandardOutput.ReadToEndAsync();
                 await process.WaitForExitAsync();
 
-                return process.ExitCode == 0 && output.ToString().Contains("ffmpeg version");
-            }
-            catch
-            {
-                return false;
-            }
-        }
+                _logAction($"Réponse JSON brute: {jsonContent}");
 
-        private async Task<bool> CheckToolExists(string toolName, string installCommand)
-        {
-            try
-            {
-                using (CancellationTokenSource cts = new CancellationTokenSource(TimeSpan.FromSeconds(5)))
+                // Nouvelle méthode de parsing plus robuste
+                try
                 {
-                    Process process = new Process
+                    using JsonDocument doc = JsonDocument.Parse(jsonContent);
+                    
+                    // Vérification directe du type HLS
+                    if (doc.RootElement.TryGetProperty("type", out var typeProp) && 
+                        typeProp.GetString() == "hls")
                     {
-                        StartInfo = new ProcessStartInfo
+                        _logAction("Stream HLS valide détecté");
+                        return "best";
+                    }
+
+                    // Vérification alternative via les streams
+                    if (doc.RootElement.TryGetProperty("streams", out var streams))
+                    {
+                        foreach (var stream in streams.EnumerateObject())
                         {
-                            FileName = toolName,
-                            Arguments = "--version",
-                            RedirectStandardOutput = true,
-                            RedirectStandardError = true,
-                            UseShellExecute = false,
-                            CreateNoWindow = true,
-                            StandardOutputEncoding = Encoding.UTF8
+                            return stream.Name; // Retourne la première qualité disponible
                         }
-                    };
-
-                    StringBuilder output = new StringBuilder();
-                    process.OutputDataReceived += (sender, e) => 
-                    {
-                        if (!string.IsNullOrEmpty(e.Data))
-                            output.AppendLine(e.Data);
-                    };
-                    
-                    process.Start();
-                    process.BeginOutputReadLine();
-                    await process.WaitForExitAsync(cts.Token);
-
-                    return process.ExitCode == 0;
-                }
-            }
-            catch
-            {
-                if (_installDependencyHandler != null)
-                {
-                    return await _installDependencyHandler($"Voulez-vous installer {toolName}?\n\nCommande: {installCommand}");
-                }
-                return false;
-            }
-        }
-
-        public async Task RecordYouTubeStream(string youtubeUrl)
-        {
-            try
-            {
-                if (!await CheckDependencies())
-                {
-                    throw new Exception("Dépendances manquantes");
-                }
-
-                _log("Vérification de la chaîne YouTube...");
-                
-                // Trouver le stream actif
-                string streamUrl = await FindActiveStream(youtubeUrl);
-                if (string.IsNullOrEmpty(streamUrl))
-                {
-                    throw new Exception("Aucun stream actif trouvé sur cette chaîne");
-                }
-
-                _log($"Stream trouvé: {streamUrl}");
-
-                string recordingsDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyVideos), "recordings");
-                string tempDir = Path.Combine(recordingsDir, "temp");
-                string outputDir = Path.Combine(recordingsDir, "YouTube");
-                
-                Directory.CreateDirectory(tempDir);
-                Directory.CreateDirectory(outputDir);
-
-                string timestamp = DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss");
-                string tempFile = Path.Combine(tempDir, $"{timestamp}.ts");
-                string finalFile = Path.Combine(outputDir, $"{timestamp}.mp4");
-
-                _log($"Début de l'enregistrement...");
-
-                using (Process process = new Process())
-                {
-                    process.StartInfo = new ProcessStartInfo
-                    {
-                        FileName = "streamlink",
-                        Arguments = $"{streamUrl} best --hls-live-restart -o \"{tempFile}\"",
-                        UseShellExecute = false,
-                        CreateNoWindow = true,
-                        RedirectStandardOutput = true,
-                        RedirectStandardError = true,
-                        StandardOutputEncoding = Encoding.UTF8
-                    };
-
-                    process.OutputDataReceived += (sender, e) => 
-                    {
-                        if (!string.IsNullOrEmpty(e.Data))
-                            _log(e.Data);
-                    };
-                    process.ErrorDataReceived += (sender, e) => 
-                    {
-                        if (!string.IsNullOrEmpty(e.Data))
-                            _log($"ERREUR: {e.Data}");
-                    };
-
-                    process.Start();
-                    process.BeginOutputReadLine();
-                    process.BeginErrorReadLine();
-                    await process.WaitForExitAsync();
-
-                    if (File.Exists(tempFile) && new FileInfo(tempFile).Length > 0)
-                    {
-                        _log("Conversion en MP4...");
-                        await ConvertToMp4(tempFile, finalFile);
-                        _log($"Enregistrement terminé: {Path.GetFileName(finalFile)}");
-                    }
-                    else
-                    {
-                        _log("Aucune donnée enregistrée");
                     }
                 }
+                catch (JsonException jsonEx)
+                {
+                    _logAction($"ERREUR Parsing JSON: {jsonEx.Message}");
+                    _logAction($"Contenu JSON problématique: {jsonContent}");
+                }
+
+                return null;
             }
             catch (Exception ex)
             {
-                _log($"ERREUR: {ex.Message}");
-                throw;
-            }
-        }
-
-        private async Task<string> FindActiveStream(string channelUrl)
-        {
-            try
-            {
-                using (var process = new Process())
-                {
-                    var outputBuilder = new StringBuilder();
-                    
-                    process.StartInfo = new ProcessStartInfo
-                    {
-                        FileName = "yt-dlp",
-                        Arguments = $"{channelUrl} --skip-download --get-url --live-from-start",
-                        RedirectStandardOutput = true,
-                        RedirectStandardError = true,
-                        UseShellExecute = false,
-                        CreateNoWindow = true,
-                        StandardOutputEncoding = Encoding.UTF8
-                    };
-
-                    process.OutputDataReceived += (sender, e) => 
-                    {
-                        if (!string.IsNullOrEmpty(e.Data))
-                            outputBuilder.AppendLine(e.Data);
-                    };
-
-                    process.Start();
-                    process.BeginOutputReadLine();
-                    await process.WaitForExitAsync();
-
-                    var output = outputBuilder.ToString().Trim();
-                    return string.IsNullOrEmpty(output) ? null : output;
-                }
-            }
-            catch (Exception ex)
-            {
-                _log($"Erreur lors de la recherche du stream: {ex.Message}");
+                _logAction($"ERREUR Détection: {ex.Message}");
                 return null;
             }
         }
 
-        public async Task ConvertToMp4(string inputFile, string outputFile)
+        public async Task<bool> RecordYouTubeStream(string youtubeUrl, CancellationToken cancellationToken)
         {
             try
             {
-                using (var process = new Process())
+                _logAction($"Initialisation enregistrement pour: {youtubeUrl}");
+                
+                string channelName = await GetChannelName(youtubeUrl);
+                string sanitizedChannelName = SanitizeFileName(channelName);
+                string outputDir = Path.Combine(recordingsDir, "YouTube", sanitizedChannelName);
+
+                // Journalisation détaillée de la création des dossiers
+                _logAction($"Tentative de création du dossier: {outputDir}");
+                try
                 {
-                    process.StartInfo = new ProcessStartInfo
+                    Directory.CreateDirectory(outputDir);
+                    
+                    if (!Directory.Exists(outputDir))
                     {
-                        FileName = "ffmpeg",
-                        Arguments = $"-i \"{inputFile}\" -c copy \"{outputFile}\" -loglevel warning",
-                        UseShellExecute = false,
-                        CreateNoWindow = true,
-                        RedirectStandardOutput = true,
-                        RedirectStandardError = true,
-                        StandardOutputEncoding = Encoding.UTF8
-                    };
-
-                    process.ErrorDataReceived += (sender, e) => 
-                    {
-                        if (!string.IsNullOrEmpty(e.Data))
-                            _log($"FFmpeg: {e.Data}");
-                    };
-
-                    process.Start();
-                    process.BeginErrorReadLine();
-                    await process.WaitForExitAsync();
-
-                    if (File.Exists(outputFile)) 
-                    {
-                        File.Delete(inputFile);
+                        _logAction("ERREUR: Le dossier n'a pas été créé");
+                        return false;
                     }
+                    
+                    // Test d'écriture
+                    string testFile = Path.Combine(outputDir, "write_test.tmp");
+                    await File.WriteAllTextAsync(testFile, "test");
+                    File.Delete(testFile);
+                    
+                    _logAction("Dossier et permissions OK");
+                }
+                catch (Exception ex)
+                {
+                    _logAction($"ERREUR Dossier: {ex.Message}");
+                    _logAction($"Chemin complet tenté: {Path.GetFullPath(outputDir)}");
+                    return false;
+                }
+
+                string timestamp = DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss");
+                string outputFile = Path.Combine(outputDir, $"{timestamp}.ts");
+                
+                _logAction($"Fichier de sortie: {outputFile}");
+
+                string arguments = $"\"{youtubeUrl}\" best --force -o \"{outputFile}\" --retry-streams 30 --retry-max 10 --loglevel debug";
+                _logAction($"Commande Streamlink: {arguments}");
+
+                _recordingStartTime = DateTime.Now;
+                _bytesRecorded = 0;
+
+                var startInfo = new ProcessStartInfo
+                {
+                    FileName = FindExecutablePath("streamlink"),
+                    Arguments = arguments,
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    CreateNoWindow = true
+                };
+
+                _logAction("Démarrage du processus Streamlink...");
+                _currentStreamlinkProcess = Process.Start(startInfo);
+                
+                if (_currentStreamlinkProcess == null)
+                {
+                    _logAction("ERREUR: Impossible de démarrer Streamlink");
+                    return false;
+                }
+
+                _logAction("Processus Streamlink démarré avec succès");
+
+                // Capture des sorties
+                _currentStreamlinkProcess.OutputDataReceived += (sender, args) => 
+                {
+                    if (!string.IsNullOrEmpty(args.Data))
+                    {
+                        _logAction($"[Streamlink] {args.Data}");
+                        
+                        if (File.Exists(outputFile))
+                        {
+                            long newSize = new FileInfo(outputFile).Length;
+                            if (newSize > _bytesRecorded)
+                            {
+                                _bytesRecorded = newSize;
+                                LogRecordingStats(_recordingStartTime, _bytesRecorded);
+                            }
+                        }
+                    }
+                };
+                
+                _currentStreamlinkProcess.ErrorDataReceived += (sender, args) => 
+                {
+                    if (!string.IsNullOrEmpty(args.Data))
+                        _logAction($"[Streamlink-ERROR] {args.Data}");
+                };
+                
+                _currentStreamlinkProcess.BeginOutputReadLine();
+                _currentStreamlinkProcess.BeginErrorReadLine();
+
+                _logAction("Attente de la fin de l'enregistrement...");
+                await _currentStreamlinkProcess.WaitForExitAsync(cancellationToken);
+                
+                _logAction($"Processus Streamlink terminé - Code de sortie: {_currentStreamlinkProcess.ExitCode}");
+
+                if (_currentStreamlinkProcess.ExitCode != 0)
+                {
+                    _logAction($"Erreur Streamlink (code {_currentStreamlinkProcess.ExitCode})");
+                    return false;
+                }
+
+                if (!File.Exists(outputFile))
+                {
+                    _logAction("ERREUR: Aucun fichier de sortie créé");
+                    return false;
+                }
+
+                long fileSize = new FileInfo(outputFile).Length;
+                if (fileSize == 0)
+                {
+                    _logAction("ERREUR: Fichier de sortie vide");
+                    File.Delete(outputFile);
+                    return false;
+                }
+
+                _logAction($"Enregistrement terminé avec succès - Taille du fichier: {fileSize} octets");
+                _logAction("Début de la conversion en MP4...");
+                
+                bool conversionResult = await ConvertToMp4(outputFile);
+                if (conversionResult)
+                {
+                    _logAction("Conversion terminée avec succès");
+                }
+                else
+                {
+                    _logAction("Erreur lors de la conversion");
+                }
+                
+                return conversionResult;
+            }
+            catch (OperationCanceledException)
+            {
+                _logAction("Enregistrement annulé par l'utilisateur");
+                return false;
+            }
+            catch (Exception ex)
+            {
+                _logAction($"ERREUR Enregistrement: {ex.Message}");
+                return false;
+            }
+            finally
+            {
+                _currentStreamlinkProcess?.Dispose();
+                _currentStreamlinkProcess = null;
+            }
+        }
+
+        private string SanitizeFileName(string name)
+        {
+            if (string.IsNullOrWhiteSpace(name))
+                return "Unknown_Channel";
+
+            var invalidChars = Path.GetInvalidFileNameChars();
+            var sb = new StringBuilder(name);
+            
+            foreach (var c in invalidChars)
+                sb.Replace(c, '_');
+            
+            return sb.ToString().Trim();
+        }
+
+        private void LogRecordingStats(DateTime startTime, long bytesRecorded)
+        {
+            var duration = DateTime.Now - startTime;
+            double mbRecorded = bytesRecorded / (1024.0 * 1024.0);
+            double mbPerMinute = duration.TotalMinutes > 0 ? mbRecorded / duration.TotalMinutes : 0;
+            
+            _logAction($"Enregistrement: {duration:mm\\:ss} | Taille: {mbRecorded:F2} MB | Débit: {mbPerMinute:F2} MB/min");
+        }
+
+        public void StopRecording()
+        {
+            try
+            {
+                if (_currentStreamlinkProcess != null && !_currentStreamlinkProcess.HasExited)
+                {
+                    _logAction("Arrêt du processus Streamlink...");
+                    _currentStreamlinkProcess.Kill();
+                    _logAction("Processus Streamlink arrêté");
                 }
             }
             catch (Exception ex)
             {
-                _log($"ERREUR conversion: {ex.Message}");
-                throw;
+                _logAction($"Erreur lors de l'arrêt: {ex.Message}");
             }
+        }
+
+        private async Task<string> GetChannelName(string youtubeUrl)
+        {
+            // Fallback direct si l'URL contient @
+            if (youtubeUrl.Contains("@"))
+            {
+                int atIndex = youtubeUrl.IndexOf('@');
+                int nextSlash = youtubeUrl.IndexOf('/', atIndex);
+                
+                if (nextSlash == -1)
+                    return youtubeUrl.Substring(atIndex + 1);
+                    
+                return youtubeUrl.Substring(atIndex + 1, nextSlash - atIndex - 1);
+            }
+
+            // Essayer avec yt-dlp seulement si disponible
+            string ytDlpPath = FindExecutablePath("yt-dlp");
+            if (!string.IsNullOrEmpty(ytDlpPath))
+            {
+                try
+                {
+                    var startInfo = new ProcessStartInfo
+                    {
+                        FileName = ytDlpPath,
+                        Arguments = $"\"{youtubeUrl}\" --print \"%(channel)s\" --no-warnings",
+                        RedirectStandardOutput = true,
+                        UseShellExecute = false,
+                        CreateNoWindow = true
+                    };
+
+                    using var process = Process.Start(startInfo);
+                    string output = await process.StandardOutput.ReadToEndAsync();
+                    await process.WaitForExitAsync();
+
+                    if (!string.IsNullOrWhiteSpace(output))
+                        return output.Trim();
+                }
+                catch { }
+            }
+
+            return "Unknown_Channel";
+        }
+
+        public async Task<bool> ConvertToMp4(string tsFilePath, string mp4FilePath = null)
+        {
+            _logAction($"Début conversion: {tsFilePath}");
+            
+            if (!File.Exists(tsFilePath))
+            {
+                _logAction($"ERREUR: Fichier TS introuvable: {tsFilePath}");
+                return false;
+            }
+
+            long inputSize = new FileInfo(tsFilePath).Length;
+            _logAction($"Taille du fichier TS: {inputSize} octets");
+
+            string ffmpegPath = FindExecutablePath("ffmpeg");
+            if (string.IsNullOrEmpty(ffmpegPath))
+            {
+                _logAction("ERREUR: FFmpeg non trouvé !");
+                return false;
+            }
+
+            mp4FilePath ??= Path.ChangeExtension(tsFilePath, ".mp4");
+            _logAction($"Fichier MP4 de sortie: {mp4FilePath}");
+
+            try
+            {
+                var startInfo = new ProcessStartInfo
+                {
+                    FileName = ffmpegPath,
+                    Arguments = $"-y -i \"{tsFilePath}\" -c:v copy -c:a aac -strict experimental \"{mp4FilePath}\"",
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    CreateNoWindow = true
+                };
+
+                _logAction("Démarrage de FFmpeg...");
+                using var process = Process.Start(startInfo);
+                
+                // Capture des logs de FFmpeg
+                process.OutputDataReceived += (sender, args) => 
+                {
+                    if (!string.IsNullOrEmpty(args.Data))
+                        _logAction($"[FFmpeg] {args.Data}");
+                };
+                process.ErrorDataReceived += (sender, args) => 
+                {
+                    if (!string.IsNullOrEmpty(args.Data))
+                        _logAction($"[FFmpeg] {args.Data}");
+                };
+                
+                process.BeginOutputReadLine();
+                process.BeginErrorReadLine();
+                
+                await process.WaitForExitAsync();
+                _logAction($"FFmpeg terminé - Code de sortie: {process.ExitCode}");
+
+                if (process.ExitCode != 0)
+                {
+                    _logAction($"ERREUR FFmpeg (code {process.ExitCode})");
+                    return false;
+                }
+
+                if (!File.Exists(mp4FilePath))
+                {
+                    _logAction("ERREUR: Fichier MP4 non créé");
+                    return false;
+                }
+
+                long outputSize = new FileInfo(mp4FilePath).Length;
+                _logAction($"Conversion réussie - Taille du MP4: {outputSize} octets");
+
+                try 
+                { 
+                    File.Delete(tsFilePath);
+                    _logAction("Fichier TS supprimé avec succès");
+                }
+                catch (Exception ex) 
+                { 
+                    _logAction($"AVERTISSEMENT: Impossible de supprimer le fichier TS: {ex.Message}"); 
+                }
+                
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logAction($"ERREUR Conversion: {ex.Message}");
+                return false;
+            }
+        }
+
+        private string FindExecutablePath(string executable)
+        {
+            try
+            {
+                // Vérifie d'abord dans le PATH système
+                string envPath = Environment.GetEnvironmentVariable("PATH");
+                if (!string.IsNullOrEmpty(envPath))
+                {
+                    foreach (var path in envPath.Split(Path.PathSeparator))
+                    {
+                        var fullPath = Path.Combine(path, executable + ".exe");
+                        if (File.Exists(fullPath))
+                            return fullPath;
+                    }
+                }
+
+                // Vérifie dans les emplacements communs
+                var commonPaths = new[]
+                {
+                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Streamlink", "bin"),
+                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "Streamlink", "bin"),
+                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "Python", "Python311", "Scripts"),
+                    Path.Combine("C:", "ffmpeg", "bin"),
+                    AppContext.BaseDirectory
+                };
+
+                foreach (var path in commonPaths)
+                {
+                    var fullPath = Path.Combine(path, executable + ".exe");
+                    if (File.Exists(fullPath))
+                        return fullPath;
+                }
+
+                // Dernière tentative - essaie d'exécuter directement
+                try
+                {
+                    var proc = new Process()
+                    {
+                        StartInfo = new ProcessStartInfo
+                        {
+                            FileName = executable,
+                            Arguments = "--version",
+                            UseShellExecute = false,
+                            RedirectStandardOutput = true,
+                            RedirectStandardError = true,
+                            CreateNoWindow = true
+                        }
+                    };
+                    if (proc.Start())
+                    {
+                        proc.Kill();
+                        return executable;
+                    }
+                }
+                catch { }
+            }
+            catch (Exception ex)
+            {
+                _logAction($"Erreur FindExecutablePath: {ex.Message}");
+            }
+
+            return null;
         }
     }
 }
