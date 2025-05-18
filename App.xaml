@@ -1,8 +1,21 @@
 ﻿<Application x:Class="AutoStreamRec.App"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:converters="clr-namespace:AutoStreamRec.Converters"
              StartupUri="MainWindow.xaml">
     <Application.Resources>
-        <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <!-- Vous pouvez ajouter d'autres dictionnaires ici si nécessaire -->
+            </ResourceDictionary.MergedDictionaries>
+            
+            <converters:UniversalBoolConverter x:Key="BooleanToVisibilityConverter" 
+                                               InverseBool="False" 
+                                               ToVisibility="True"/>
+                                             
+            <converters:UniversalBoolConverter x:Key="InverseBooleanConverter" 
+                                               InverseBool="True" 
+                                               ToVisibility="False"/>
+        </ResourceDictionary>
     </Application.Resources>
 </Application>
