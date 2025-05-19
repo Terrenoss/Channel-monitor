@@ -17,6 +17,7 @@ namespace AutoStreamRec.ViewModels
         private bool _isWorking;
         private bool _isMonitoring;
         private string _currentAction;
+        private string _currentRecordingStats = "Aucun enregistrement en cours";
         private ObservableCollection<string> _activityLogs = new();
         private readonly StreamRecorderService _streamRecorder;
         private CancellationTokenSource _monitoringCts;
@@ -51,6 +52,12 @@ namespace AutoStreamRec.ViewModels
             set => SetProperty(ref _currentAction, value);
         }
 
+        public string CurrentRecordingStats
+        {
+            get => _currentRecordingStats;
+            set => SetProperty(ref _currentRecordingStats, value);
+        }
+
         public ObservableCollection<string> ActivityLogs
         {
             get => _activityLogs;
@@ -60,17 +67,22 @@ namespace AutoStreamRec.ViewModels
         public ICommand ConvertCommand => new RelayCommand(async () => await ConvertTsToMp4());
         public ICommand MonitorCommand => new RelayCommand(async () => await MonitorChannel());
         public ICommand StopMonitoringCommand => new RelayCommand(() => StopMonitoring());
-        // Nouvelle commande pour copier les logs
         public ICommand CopyLogsCommand => new RelayCommand(CopyLogsToClipboard);
-        // Nouvelle commande pour effacer les logs
         public ICommand ClearLogsCommand => new RelayCommand(ClearLogs);
 
         public MainViewModel()
         {
-            _streamRecorder = new StreamRecorderService(AddLog);
+            _streamRecorder = new StreamRecorderService(AddLog, UpdateRecordingStats);
         }
-        
-        // Méthode pour copier les logs dans le presse-papier
+
+        private void UpdateRecordingStats(string message)
+        {
+            Application.Current.Dispatcher.Invoke(() =>
+            {
+                CurrentRecordingStats = $"En cours: {message}";
+            });
+        }
+
         private void CopyLogsToClipboard()
         {
             try
@@ -100,12 +112,12 @@ namespace AutoStreamRec.ViewModels
             }
         }
 
-        // Méthode pour effacer les logs
         private void ClearLogs()
         {
             Application.Current.Dispatcher.Invoke(() =>
             {
                 ActivityLogs.Clear();
+                CurrentRecordingStats = "Aucun enregistrement en cours";
                 AddLog("Journal des logs effacé");
                 StatusMessage = "Logs effacés";
             });
@@ -116,29 +128,14 @@ namespace AutoStreamRec.ViewModels
             Application.Current.Dispatcher.Invoke(() =>
             {
                 ActivityLogs.Insert(0, $"[{DateTime.Now:HH:mm:ss}] {message}");
-                if (ActivityLogs.Count > 100)
+                if (ActivityLogs.Count > 200)
                     ActivityLogs.RemoveAt(ActivityLogs.Count - 1);
             });
 
-            // Écriture dans un fichier log
             string logDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Logs");
             Directory.CreateDirectory(logDir);
             string logFile = Path.Combine(logDir, $"log_{DateTime.Now:yyyyMMdd}.txt");
             File.AppendAllText(logFile, $"[{DateTime.Now:HH:mm:ss}] {message}" + Environment.NewLine);
-        }
-
-        private async Task<bool> InstallDependencyPrompt(string message)
-        {
-            return await Application.Current.Dispatcher.Invoke(async () =>
-            {
-                var result = MessageBox.Show(
-                    $"{message}\n\nL'application va tenter d'installer automatiquement la dépendance.",
-                    "Dépendance manquante",
-                    MessageBoxButton.YesNo,
-                    MessageBoxImage.Question);
-
-                return result == MessageBoxResult.Yes;
-            });
         }
 
         private async Task ConvertTsToMp4()
@@ -188,91 +185,91 @@ namespace AutoStreamRec.ViewModels
         }
 
         private async Task MonitorChannel()
-{
-    if (IsMonitoring) return;
-
-    try
-    {
-        IsMonitoring = true;
-        IsWorking = true;
-        CurrentAction = "Surveillance en cours";
-        StatusMessage = "Démarrage surveillance...";
-        AddLog("Initialisation surveillance");
-
-        // Vérification des permissions avant de commencer
-        string baseDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyVideos), "recordings");
-        if (!CheckWriteAccess(baseDir))
         {
-            StatusMessage = "Erreur permissions";
-            AddLog("ERREUR: Pas de permissions d'écriture dans le dossier d'enregistrement");
-            return;
-        }
+            if (IsMonitoring) return;
 
-        if (!await _streamRecorder.CheckDependencies())
-        {
-            StatusMessage = "Dépendances manquantes";
-            return;
-        }
-
-        if (string.IsNullOrWhiteSpace(YoutubeUrl))
-        {
-            StatusMessage = "URL YouTube requise";
-            return;
-        }
-
-        _monitoringCts = new CancellationTokenSource();
-        AddLog($"Début surveillance: {YoutubeUrl}");
-
-        while (!_monitoringCts.Token.IsCancellationRequested)
-        {
-            AddLog("Scan des streams disponibles...");
-            string quality = await _streamRecorder.GetLiveStreamUrl(YoutubeUrl);
-            
-            if (!string.IsNullOrEmpty(quality))
+            try
             {
-                AddLog($"Stream détecté - Lancement enregistrement (qualité: {quality})");
-                bool success = await _streamRecorder.RecordYouTubeStream(YoutubeUrl, _monitoringCts.Token);
-                
-                if (success) 
+                IsMonitoring = true;
+                IsWorking = true;
+                CurrentAction = "Surveillance en cours";
+                StatusMessage = "Démarrage surveillance...";
+                AddLog("Initialisation surveillance");
+
+                string baseDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyVideos), "recordings");
+                if (!CheckWriteAccess(baseDir))
                 {
-                    AddLog("Enregistrement terminé avec succès");
-                    StatusMessage = "Enregistrement réussi";
+                    StatusMessage = "Erreur permissions";
+                    AddLog("ERREUR: Pas de permissions d'écriture dans le dossier d'enregistrement");
+                    return;
                 }
-                else
+
+                if (!await _streamRecorder.CheckDependencies())
                 {
-                    AddLog("Problème lors de l'enregistrement");
-                    StatusMessage = "Erreur enregistrement";
+                    StatusMessage = "Dépendances manquantes";
+                    return;
+                }
+
+                if (string.IsNullOrWhiteSpace(YoutubeUrl))
+                {
+                    StatusMessage = "URL YouTube requise";
+                    return;
+                }
+
+                _monitoringCts = new CancellationTokenSource();
+                AddLog($"Début surveillance: {YoutubeUrl}");
+
+                while (!_monitoringCts.Token.IsCancellationRequested)
+                {
+                    AddLog("Scan des streams disponibles...");
+                    string quality = await _streamRecorder.GetLiveStreamUrl(YoutubeUrl);
+                    
+                    if (!string.IsNullOrEmpty(quality))
+                    {
+                        AddLog($"Stream détecté - Lancement enregistrement (qualité: {quality})");
+                        bool success = await _streamRecorder.RecordYouTubeStream(YoutubeUrl, _monitoringCts.Token);
+                        
+                        if (success) 
+                        {
+                            AddLog("Enregistrement terminé avec succès");
+                            StatusMessage = "Enregistrement réussi";
+                        }
+                        else
+                        {
+                            AddLog("Problème lors de l'enregistrement");
+                            StatusMessage = "Erreur enregistrement";
+                        }
+                    }
+                    else
+                    {
+                        AddLog($"Aucun stream actif détecté ({DateTime.Now:HH:mm:ss})");
+                        StatusMessage = "En attente de stream...";
+                    }
+
+                    AddLog("Prochaine vérification dans 30 secondes...");
+                    await Task.Delay(TimeSpan.FromSeconds(30), _monitoringCts.Token);
                 }
             }
-            else
+            catch (OperationCanceledException)
             {
-                AddLog($"Aucun stream actif détecté ({DateTime.Now:HH:mm:ss})");
-                StatusMessage = "En attente de stream...";
+                AddLog("Surveillance arrêtée par l'utilisateur");
+                StatusMessage = "Surveillance arrêtée";
             }
-
-            AddLog("Prochaine vérification dans 30 secondes...");
-            await Task.Delay(TimeSpan.FromSeconds(30), _monitoringCts.Token);
+            catch (Exception ex)
+            {
+                AddLog($"ERREUR surveillance: {ex.Message}");
+                StatusMessage = "Erreur surveillance";
+            }
+            finally
+            {
+                _monitoringCts?.Dispose();
+                IsMonitoring = false;
+                IsWorking = false;
+                CurrentAction = "";
+                StatusMessage = "Prêt";
+                CurrentRecordingStats = "Aucun enregistrement en cours";
+            }
         }
-    }
-    catch (OperationCanceledException)
-    {
-        AddLog("Surveillance arrêtée par l'utilisateur");
-        StatusMessage = "Surveillance arrêtée";
-    }
-    catch (Exception ex)
-    {
-        AddLog($"ERREUR surveillance: {ex.Message}");
-        StatusMessage = "Erreur surveillance";
-    }
-    finally
-    {
-        _monitoringCts?.Dispose();
-        IsMonitoring = false;
-        IsWorking = false;
-        CurrentAction = "";
-        StatusMessage = "Prêt";
-    }
-}
         
         private bool CheckWriteAccess(string folderPath)
         {
@@ -300,6 +297,7 @@ namespace AutoStreamRec.ViewModels
                 _monitoringCts?.Cancel();
                 _streamRecorder.StopRecording();
                 StatusMessage = "Arrêt en cours...";
+                CurrentRecordingStats = "Arrêt demandé...";
             }
             catch (Exception ex)
             {

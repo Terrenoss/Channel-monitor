@@ -13,15 +13,16 @@ namespace AutoStreamRec.Services
     {
         private readonly string recordingsDir;
         private readonly Action<string> _logAction;
+        private readonly Action<string> _statAction;
         private Process _currentStreamlinkProcess;
         private DateTime _recordingStartTime;
         private long _bytesRecorded;
 
-        public StreamRecorderService(Action<string> logAction)
+        public StreamRecorderService(Action<string> logAction, Action<string> statAction)
         {
             _logAction = logAction;
+            _statAction = statAction;
             
-            // Vérification du chemin MyVideos avec fallback
             string myVideosPath = Environment.GetFolderPath(Environment.SpecialFolder.MyVideos);
             _logAction($"Chemin MyVideos: {myVideosPath}");
             
@@ -92,12 +93,10 @@ namespace AutoStreamRec.Services
 
                 _logAction($"Réponse JSON brute: {jsonContent}");
 
-                // Nouvelle méthode de parsing plus robuste
                 try
                 {
                     using JsonDocument doc = JsonDocument.Parse(jsonContent);
                     
-                    // Vérification directe du type HLS
                     if (doc.RootElement.TryGetProperty("type", out var typeProp) && 
                         typeProp.GetString() == "hls")
                     {
@@ -105,12 +104,11 @@ namespace AutoStreamRec.Services
                         return "best";
                     }
 
-                    // Vérification alternative via les streams
                     if (doc.RootElement.TryGetProperty("streams", out var streams))
                     {
                         foreach (var stream in streams.EnumerateObject())
                         {
-                            return stream.Name; // Retourne la première qualité disponible
+                            return stream.Name;
                         }
                     }
                 }
@@ -139,7 +137,6 @@ namespace AutoStreamRec.Services
                 string sanitizedChannelName = SanitizeFileName(channelName);
                 string outputDir = Path.Combine(recordingsDir, "YouTube", sanitizedChannelName);
 
-                // Journalisation détaillée de la création des dossiers
                 _logAction($"Tentative de création du dossier: {outputDir}");
                 try
                 {
@@ -151,7 +148,6 @@ namespace AutoStreamRec.Services
                         return false;
                     }
                     
-                    // Test d'écriture
                     string testFile = Path.Combine(outputDir, "write_test.tmp");
                     await File.WriteAllTextAsync(testFile, "test");
                     File.Delete(testFile);
@@ -197,12 +193,22 @@ namespace AutoStreamRec.Services
 
                 _logAction("Processus Streamlink démarré avec succès");
 
-                // Capture des sorties
                 _currentStreamlinkProcess.OutputDataReceived += (sender, args) => 
                 {
                     if (!string.IsNullOrEmpty(args.Data))
                     {
-                        _logAction($"[Streamlink] {args.Data}");
+                        // Filtre des logs techniques
+                        bool shouldLog = !(args.Data.Contains("[stream.hls][debug] Segment") ||
+                                         args.Data.Contains("[stream.hls][debug] Writing") ||
+                                         args.Data.Contains("[stream.hls][debug] Adding") ||
+                                         args.Data.Contains("[stream.hls][debug] Reloading"));
+
+                        if (shouldLog && (args.Data.Contains("[cli][info]") || 
+                                        args.Data.Contains("[download]") ||
+                                        args.Data.Contains("error", StringComparison.OrdinalIgnoreCase)))
+                        {
+                            _logAction($"[Streamlink] {args.Data}");
+                        }
                         
                         if (File.Exists(outputFile))
                         {
@@ -302,7 +308,7 @@ namespace AutoStreamRec.Services
             double mbRecorded = bytesRecorded / (1024.0 * 1024.0);
             double mbPerMinute = duration.TotalMinutes > 0 ? mbRecorded / duration.TotalMinutes : 0;
             
-            _logAction($"Enregistrement: {duration:mm\\:ss} | Taille: {mbRecorded:F2} MB | Débit: {mbPerMinute:F2} MB/min");
+            _statAction($"{duration:hh\\:mm\\:ss} | {mbRecorded:F2} MB | {mbPerMinute:F2} MB/min");
         }
 
         public void StopRecording()
@@ -324,7 +330,6 @@ namespace AutoStreamRec.Services
 
         private async Task<string> GetChannelName(string youtubeUrl)
         {
-            // Fallback direct si l'URL contient @
             if (youtubeUrl.Contains("@"))
             {
                 int atIndex = youtubeUrl.IndexOf('@');
@@ -336,7 +341,6 @@ namespace AutoStreamRec.Services
                 return youtubeUrl.Substring(atIndex + 1, nextSlash - atIndex - 1);
             }
 
-            // Essayer avec yt-dlp seulement si disponible
             string ytDlpPath = FindExecutablePath("yt-dlp");
             if (!string.IsNullOrEmpty(ytDlpPath))
             {
@@ -402,7 +406,6 @@ namespace AutoStreamRec.Services
                 _logAction("Démarrage de FFmpeg...");
                 using var process = Process.Start(startInfo);
                 
-                // Capture des logs de FFmpeg
                 process.OutputDataReceived += (sender, args) => 
                 {
                     if (!string.IsNullOrEmpty(args.Data))
@@ -458,7 +461,6 @@ namespace AutoStreamRec.Services
         {
             try
             {
-                // Vérifie d'abord dans le PATH système
                 string envPath = Environment.GetEnvironmentVariable("PATH");
                 if (!string.IsNullOrEmpty(envPath))
                 {
@@ -470,7 +472,6 @@ namespace AutoStreamRec.Services
                     }
                 }
 
-                // Vérifie dans les emplacements communs
                 var commonPaths = new[]
                 {
                     Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Streamlink", "bin"),
@@ -487,7 +488,6 @@ namespace AutoStreamRec.Services
                         return fullPath;
                 }
 
-                // Dernière tentative - essaie d'exécuter directement
                 try
                 {
                     var proc = new Process()
