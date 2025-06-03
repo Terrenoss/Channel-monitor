@@ -7,6 +7,8 @@
         <ImplicitUsings>enable</ImplicitUsings>
         <UseWPF>true</UseWPF>
         <ApplicationIcon>logo-strivea.ico</ApplicationIcon>
+        <AssemblyName>Strivea</AssemblyName>
+        <RootNamespace>Strivea</RootNamespace>
     </PropertyGroup>
 
 </Project>
