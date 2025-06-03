@@ -79,10 +79,10 @@ namespace AutoStreamRec.ViewModels
 
         private void UpdateRecordingStats(string message)
         {
-            Application.Current?.Dispatcher.BeginInvoke(new Action(() =>
+            Application.Current?.Dispatcher.BeginInvoke(() =>
             {
                 CurrentRecordingStats = $"En cours: {message}";
-            }));
+            });
         }
     }
 }

@@ -54,16 +54,23 @@ namespace AutoStreamRec.ViewModels
                     if (!string.IsNullOrEmpty(quality))
                     {
                         vm.ActivityLogs.Insert(0, $"[Monitor] Stream détecté ({quality})");
-                        bool success = await _recorder.RecordYouTubeStream(vm.YoutubeUrl, _monitoringCts.Token);
-
-                        vm.ActivityLogs.Insert(0, success
-                            ? "[Monitor] Enregistrement terminé avec succès"
-                            : "[Monitor] Erreur d'enregistrement");
+                        try
+                        {
+                            bool success = await _recorder.RecordYouTubeStream(vm.YoutubeUrl, _monitoringCts.Token);
+                            vm.ActivityLogs.Insert(0, success
+                                ? "[Monitor] Enregistrement terminé avec succès"
+                                : "[Monitor] Erreur d'enregistrement");
+                        }
+                        catch (OperationCanceledException)
+                        {
+                            vm.ActivityLogs.Insert(0, "[Monitor] Enregistrement annulé manuellement");
+                        }
                     }
                     else
                     {
                         vm.ActivityLogs.Insert(0, "[Monitor] Aucun stream actif");
                     }
+
 
                     await Task.Delay(TimeSpan.FromSeconds(30), _monitoringCts.Token);
                 }

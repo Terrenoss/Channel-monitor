@@ -4,7 +4,6 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Timers;
-using Timer = System.Timers.Timer;
 
 namespace AutoStreamRec.Services
 {
@@ -20,8 +19,9 @@ namespace AutoStreamRec.Services
         private Process _currentProcess;
         private DateTime _startTime;
         private long _bytesRecorded;
-        private Timer _statsTimer;
+        private System.Timers.Timer _statsTimer;
         private string _lastRecordedFile;
+        private string _detectedQuality;
 
         public YouTubeStreamRecorder(Action<string> logAction,
                                      FileHelper fileHelper,
@@ -98,10 +98,18 @@ namespace AutoStreamRec.Services
 
             _currentProcess.OutputDataReceived += (s, e) =>
             {
-                if (!string.IsNullOrWhiteSpace(e.Data) &&
-                    !e.Data.Contains("[stream.hls][debug]"))
+                if (!string.IsNullOrWhiteSpace(e.Data))
                 {
-                    _log($"[Streamlink] {e.Data}");
+                    if (e.Data.Contains("Found matching stream:"))
+                    {
+                        _detectedQuality = e.Data.Split(':')[1].Trim();
+                        _log($"Qualité réelle détectée : {_detectedQuality}");
+                    }
+
+                    if (!e.Data.Contains("[stream.hls][debug]"))
+                    {
+                        _log($"[Streamlink] {e.Data}");
+                    }
                 }
             };
             _currentProcess.BeginOutputReadLine();
@@ -114,7 +122,7 @@ namespace AutoStreamRec.Services
             catch (OperationCanceledException)
             {
                 _log("Enregistrement annulé par l'utilisateur");
-                return false;
+                throw;
             }
             finally
             {
