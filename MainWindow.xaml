@@ -1,66 +1,57 @@
 ﻿<Window x:Class="AutoStreamRec.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:converters="clr-namespace:AutoStreamRec.Converters"
-        Title="Stream Recorder" Height="700" Width="1000"
+        Title="YouTube Stream Recorder" Height="600" Width="800"
         WindowStartupLocation="CenterScreen">
-    
-    <Window.Resources>
-        <converters:UniversalBoolConverter x:Key="BooleanToVisibilityConverter" 
-                                         InverseBool="False" 
-                                         ToVisibility="True"/>
-        <converters:UniversalBoolConverter x:Key="InverseBooleanConverter" 
-                                         InverseBool="True" 
-                                         ToVisibility="False"/>
-    </Window.Resources>
     
     <Grid Margin="10">
         <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <!-- Header -->
+        <!-- En-tête -->
         <StackPanel Grid.Row="0">
-            <TextBlock Text="YouTube Stream Recorder" FontSize="22" FontWeight="Bold"/>
+            <TextBlock Text="YouTube Stream Recorder" FontSize="20" FontWeight="Bold"/>
             <TextBlock Text="{Binding CurrentAction}" Foreground="Blue"
-                      Visibility="{Binding IsWorking, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                     Visibility="{Binding IsWorking, Converter={StaticResource BooleanToVisibilityConverter}}"/>
         </StackPanel>
 
-        <!-- Controls -->
+        <!-- Contrôles -->
         <StackPanel Grid.Row="1" Margin="0,10">
-            <Button Content="Convertir TS en MP4" Command="{Binding ConvertCommand}"
-                    Margin="0,5" Padding="15,8" FontWeight="Bold"/>
+            <TextBlock Text="URL YouTube:" FontWeight="Bold"/>
+            <TextBox Text="{Binding YoutubeUrl}" Margin="0,5" Padding="8"/>
             
-            <StackPanel Margin="0,20,0,0">
-                <TextBlock Text="URL YouTube:" FontWeight="Bold"/>
-                <TextBox Text="{Binding YoutubeUrl}" Margin="0,5" Padding="8"/>
+            <StackPanel Orientation="Horizontal" Margin="0,10">
+                <Button Content="Démarrer la surveillance" Command="{Binding MonitorCommand}"
+                        Margin="0,0,10,0" Padding="15,5" FontWeight="Bold"
+                        IsEnabled="{Binding IsMonitoring, Converter={StaticResource InverseBooleanConverter}}"/>
                 
-                <StackPanel Orientation="Horizontal" Margin="0,5">
-                    <Button Content="Surveiller et Enregistrer" Command="{Binding MonitorCommand}"
-                            Margin="0,0,10,0" Padding="15,8" FontWeight="Bold"
-                            IsEnabled="{Binding IsMonitoring, Converter={StaticResource InverseBooleanConverter}}"/>
-                    
-                    <Button Content="Arrêter la surveillance" Command="{Binding StopMonitoringCommand}"
-                            Padding="15,8" FontWeight="Bold" Background="#FFFF0000"
-                            Visibility="{Binding IsMonitoring, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-                </StackPanel>
+                <Button Content="Arrêter" Command="{Binding StopMonitoringCommand}"
+                        Padding="15,5" FontWeight="Bold" Background="#FFFF0000"
+                        Visibility="{Binding IsMonitoring, Converter={StaticResource BooleanToVisibilityConverter}}"/>
             </StackPanel>
         </StackPanel>
 
-        <!-- Activity Log -->
-        <GroupBox Grid.Row="2" Header="Journal d'activité" Margin="0,20">
+        <!-- Statistiques d'enregistrement -->
+        <Border Grid.Row="2" Background="#FFEEEEDD" Margin="0,5" Padding="10,5" CornerRadius="5">
+            <TextBlock Text="{Binding CurrentRecordingStats}" FontWeight="Bold" 
+                      HorizontalAlignment="Center"/>
+        </Border>
+
+        <!-- Journal des logs -->
+        <GroupBox Grid.Row="3" Header="Journal d'activité" Margin="0,10">
             <DockPanel>
                 <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" HorizontalAlignment="Right">
-                    <Button Content="Copier les logs" Command="{Binding CopyLogsCommand}" 
-                            Margin="5" Padding="10,3" ToolTip="Copier tous les logs dans le presse-papier"/>
-                    <Button Content="Effacer les logs" Command="{Binding ClearLogsCommand}" 
-                            Margin="5" Padding="10,3" ToolTip="Effacer l'historique des logs"/>
+                    <Button Content="Copier" Command="{Binding CopyLogsCommand}" 
+                            Margin="5" Padding="8,3" ToolTip="Copier les logs"/>
+                    <Button Content="Effacer" Command="{Binding ClearLogsCommand}" 
+                            Margin="5" Padding="8,3" ToolTip="Effacer les logs"/>
                 </StackPanel>
-                <ListView ItemsSource="{Binding ActivityLogs}" FontFamily="Consolas" FontSize="12"
-                          ScrollViewer.VerticalScrollBarVisibility="Auto">
+                <ListView ItemsSource="{Binding ActivityLogs}" FontFamily="Consolas" FontSize="12">
                     <ListView.ItemTemplate>
                         <DataTemplate>
                             <TextBlock Text="{Binding}" TextWrapping="Wrap"/>
@@ -70,8 +61,8 @@
             </DockPanel>
         </GroupBox>
 
-        <!-- Status Bar -->
-        <StatusBar Grid.Row="3">
+        <!-- Barre de statut -->
+        <StatusBar Grid.Row="4">
             <StatusBarItem>
                 <TextBlock Text="{Binding StatusMessage}" FontWeight="Bold"/>
             </StatusBarItem>
