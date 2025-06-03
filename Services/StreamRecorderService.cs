@@ -6,35 +6,56 @@ namespace AutoStreamRec.Services
 {
     public class StreamRecorderService
     {
-        private readonly YouTubeStreamRecorder _recorder;
-        private readonly LiveStreamDetector _detector;
-        private readonly DependencyChecker _checker;
+        private readonly YouTubeStreamRecorder _streamRecorder;
+        private readonly ExecutableLocator _locator;
+        private readonly FileHelper _fileHelper;
+        private readonly YouTubeHelper _ytHelper;
         private readonly VideoConverter _converter;
+        private readonly RecordingStatsLogger _stats;
 
-        public StreamRecorderService(Action<string> logAction, Action<string> statAction)
+        public StreamRecorderService(
+            Action<string> logAction,
+            Action<string> statsAction)
         {
-            var locator = new ExecutableLocator(logAction);
-            _converter = new VideoConverter(logAction, locator);
-            var statsLogger = new RecordingStatsLogger(statAction);
-            var fileHelper = new FileHelper(logAction);
-            var ytHelper = new YouTubeHelper(locator);
-
-            _checker = new DependencyChecker(logAction, locator);
-            _detector = new LiveStreamDetector(logAction);
-            _recorder = new YouTubeStreamRecorder(logAction, fileHelper, ytHelper, statsLogger, _converter, locator);
+            _locator = new ExecutableLocator(logAction);
+            _fileHelper = new FileHelper(logAction);
+            _ytHelper = new YouTubeHelper(_locator);
+            _stats = new RecordingStatsLogger(statsAction);
+            _converter = new VideoConverter(logAction, _locator);
+            _streamRecorder = new YouTubeStreamRecorder(logAction, _fileHelper, _ytHelper, _stats, _converter, _locator);
         }
 
-        public Task<bool> CheckDependencies() => _checker.CheckDependencies();
-
-        public Task<string> GetLiveStreamUrl(string channelUrl) => _detector.GetLiveStreamUrl(channelUrl);
-
-        public Task<bool> RecordYouTubeStream(string youtubeUrl, CancellationToken token) => _recorder.RecordStream(youtubeUrl, token);
-
-        public void StopRecording() => _recorder.Stop();
-
-        public Task<bool> ConvertToMp4(string tsFilePath, string mp4FilePath = null)
+        public async Task<bool> CheckDependencies()
         {
-            return _converter.ConvertToMp4(tsFilePath, mp4FilePath);
+            // ✅ à adapter si tu veux une vérification plus fine
+            return !string.IsNullOrEmpty(_locator.FindExecutablePath("streamlink"))
+                && !string.IsNullOrEmpty(_locator.FindExecutablePath("ffmpeg"))
+                && !string.IsNullOrEmpty(_locator.FindExecutablePath("yt-dlp"));
+        }
+
+        public async Task<string> GetLiveStreamUrl(string url)
+        {
+            return await _ytHelper.GetChannelNameAsync(url); // tu peux ajuster si tu as une vraie détection
+        }
+
+        public async Task<bool> RecordYouTubeStream(string url, CancellationToken token)
+        {
+            return await _streamRecorder.RecordStream(url, token);
+        }
+
+        public void StopRecording()
+        {
+            _streamRecorder.Stop();
+        }
+
+        public string GetLastStreamQuality()
+        {
+            return _streamRecorder.LastDetectedQuality;
+        }
+
+        public async Task<bool> ConvertToMp4(string tsPath)
+        {
+            return await _converter.ConvertToMp4(tsPath);
         }
     }
 }

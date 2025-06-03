@@ -49,11 +49,15 @@ namespace AutoStreamRec.ViewModels
                 while (!_monitoringCts.Token.IsCancellationRequested)
                 {
                     vm.ActivityLogs.Insert(0, "[Monitor] Vérification du live...");
-                    string quality = await _recorder.GetLiveStreamUrl(vm.YoutubeUrl);
 
-                    if (!string.IsNullOrEmpty(quality))
+                    string streamUrl = await _recorder.GetLiveStreamUrl(vm.YoutubeUrl);
+
+                    if (!string.IsNullOrEmpty(streamUrl))
                     {
+                        // ✅ Récupération de la qualité réelle détectée depuis StreamRecorderService
+                        string quality = _recorder.GetLastStreamQuality();
                         vm.ActivityLogs.Insert(0, $"[Monitor] Stream détecté ({quality})");
+
                         try
                         {
                             bool success = await _recorder.RecordYouTubeStream(vm.YoutubeUrl, _monitoringCts.Token);
@@ -70,7 +74,6 @@ namespace AutoStreamRec.ViewModels
                     {
                         vm.ActivityLogs.Insert(0, "[Monitor] Aucun stream actif");
                     }
-
 
                     await Task.Delay(TimeSpan.FromSeconds(30), _monitoringCts.Token);
                 }

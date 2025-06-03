@@ -23,6 +23,8 @@ namespace AutoStreamRec.Services
         private string _lastRecordedFile;
         private string _detectedQuality;
 
+        public string LastDetectedQuality => _detectedQuality ?? "best";
+
         public YouTubeStreamRecorder(Action<string> logAction,
                                      FileHelper fileHelper,
                                      YouTubeHelper ytHelper,
