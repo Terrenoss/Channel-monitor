@@ -35,14 +35,14 @@ namespace AutoStreamRec.ViewModels
                 return;
             }
 
-            if (string.IsNullOrWhiteSpace(vm.YoutubeUrl))
+            if (string.IsNullOrWhiteSpace(vm.StreamUrl))
             {
-                vm.StatusMessage = "URL YouTube requise";
+                vm.StatusMessage = "URL requise";
                 return;
             }
 
             _monitoringCts = new CancellationTokenSource();
-            vm.ActivityLogs.Insert(0, $"[Monitor] Surveillance de {vm.YoutubeUrl}");
+            vm.ActivityLogs.Insert(0, $"[Monitor] Surveillance de {vm.StreamUrl}");
 
             try
             {
@@ -50,17 +50,15 @@ namespace AutoStreamRec.ViewModels
                 {
                     vm.ActivityLogs.Insert(0, "[Monitor] Vérification du live...");
 
-                    string streamUrl = await _recorder.GetLiveStreamUrl(vm.YoutubeUrl);
+                    var streamInfo = await _recorder.GetLiveStreamInfo(vm.StreamUrl);
 
-                    if (!string.IsNullOrEmpty(streamUrl))
+                    if (streamInfo.IsLive)
                     {
-                        // ✅ Récupération de la qualité réelle détectée depuis StreamRecorderService
-                        string quality = _recorder.GetLastStreamQuality();
-                        vm.ActivityLogs.Insert(0, $"[Monitor] Stream détecté ({quality})");
+                        vm.ActivityLogs.Insert(0, $"[Monitor] Stream détecté sur {streamInfo.Platform} ({streamInfo.Quality})");
 
                         try
                         {
-                            bool success = await _recorder.RecordYouTubeStream(vm.YoutubeUrl, _monitoringCts.Token);
+                            bool success = await _recorder.RecordStream(vm.StreamUrl, _monitoringCts.Token);
                             vm.ActivityLogs.Insert(0, success
                                 ? "[Monitor] Enregistrement terminé avec succès"
                                 : "[Monitor] Erreur d'enregistrement");

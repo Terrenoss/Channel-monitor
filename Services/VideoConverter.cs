@@ -16,7 +16,7 @@ namespace AutoStreamRec.Services
             _locator = locator;
         }
 
-        public async Task<bool> ConvertToMp4(string tsFilePath, string mp4FilePath = null)
+        public async Task<bool> ConvertToMp4(string tsFilePath, string? mp4FilePath = null)
         {
             _log($"Début conversion: {tsFilePath}");
 
@@ -49,6 +49,12 @@ namespace AutoStreamRec.Services
                 };
 
                 using var process = Process.Start(startInfo);
+                if (process == null)
+                {
+                    _log("ERREUR: Impossible de démarrer FFmpeg");
+                    return false;
+                }
+
                 process.BeginOutputReadLine();
                 process.BeginErrorReadLine();
 
