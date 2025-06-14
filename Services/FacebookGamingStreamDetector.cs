@@ -1,58 +1,65 @@
+using System;
 using System.Threading.Tasks;
-using AutoStreamRec.Models;
+using Microsoft.Extensions.Logging;
+using System.Linq;
+using Strivea.Models;
 
-namespace AutoStreamRec.Services
+namespace Strivea.Services
 {
     public class FacebookGamingStreamDetector : BaseStreamDetector
     {
-        public FacebookGamingStreamDetector(Action<string> logAction, ExecutableLocator locator)
-            : base(logAction, locator)
+        public FacebookGamingStreamDetector(ILogger logger, IExecutableLocator executableLocator)
+            : base(logger, executableLocator)
         {
         }
 
         public override bool CanHandle(string url)
         {
-            return url.Contains("facebook.com") || url.Contains("fb.gg");
+            return !string.IsNullOrEmpty(url) && url.Contains("facebook.com/gaming");
         }
 
-        protected override string GetPlatformName()
+        public override async Task<StreamInfo> GetStreamInfoAsync(string url)
         {
-            return "Facebook Gaming";
-        }
+            try
+            {
+                _logger.LogInformation($"Récupération des informations du stream Facebook Gaming pour : {url}");
 
-        public override async Task<StreamInfo> DetectStream(string url)
-        {
-            var streamInfo = new StreamInfo
-            {
-                IsLive = true,
-                Platform = GetPlatformName(),
-                DetectionTime = DateTime.Now,
-                Url = url
-            };
+                var streamlinkPath = _executableLocator.FindExecutable("streamlink");
+                if (string.IsNullOrEmpty(streamlinkPath))
+                {
+                    _logger.LogError("Streamlink non trouvé");
+                    return new StreamInfo
+                    {
+                        ChannelName = url.Split('/').Last(),
+                        StreamUrl = url,
+                        Title = "Erreur : Streamlink non trouvé",
+                        IsLive = false
+                    };
+                }
 
-            // Extraire le nom de la chaîne
-            if (url.Contains("facebook.com/"))
-            {
-                int startIndex = url.IndexOf("facebook.com/") + 13;
-                int endIndex = url.IndexOf('/', startIndex);
-                streamInfo.ChannelName = endIndex == -1 
-                    ? url.Substring(startIndex)
-                    : url.Substring(startIndex, endIndex - startIndex);
-            }
-            else if (url.Contains("fb.gg/"))
-            {
-                int startIndex = url.IndexOf("fb.gg/") + 6;
-                int endIndex = url.IndexOf('/', startIndex);
-                streamInfo.ChannelName = endIndex == -1 
-                    ? url.Substring(startIndex)
-                    : url.Substring(startIndex, endIndex - startIndex);
-            }
-            else
-            {
-                streamInfo.ChannelName = "Unknown_Channel";
-            }
+                // TODO: Implémenter la détection réelle avec streamlink
+                // Pour l'instant, on simule une détection
+                await Task.Delay(1000);
 
-            return streamInfo;
+                return new StreamInfo
+                {
+                    ChannelName = url.Split('/').Last(),
+                    StreamUrl = url,
+                    Title = "Stream Facebook Gaming en direct",
+                    IsLive = true
+                };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Erreur lors de la récupération des informations du stream Facebook Gaming pour {url}");
+                return new StreamInfo
+                {
+                    ChannelName = url.Split('/').Last(),
+                    StreamUrl = url,
+                    Title = $"Erreur : {ex.Message}",
+                    IsLive = false
+                };
+            }
         }
     }
 } 

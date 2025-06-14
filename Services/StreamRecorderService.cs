@@ -5,326 +5,332 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using AutoStreamRec.Models;
+using Strivea.Models;
 
-namespace AutoStreamRec.Services
+namespace Strivea.Services
 {
     public class StreamRecorderService
     {
         private readonly ILogger<StreamRecorderService> _logger;
-        private readonly ILogAction _log;
-        private readonly IStatsAction _stats;
-        private readonly ExecutableLocator _locator;
-        private readonly FileHelper _fileHelper;
-        private readonly VideoConverter _converter;
-        private readonly List<IStreamDetector> _detectors;
+        private readonly IExecutableLocator _executableLocator;
+        private readonly RecordingStatsLogger _statsLogger;
+        private readonly VideoConverter _videoConverter;
+        private readonly Action<string> _log;
+        private readonly Dictionary<string, IStreamDetector> _detectors;
         private Process _currentProcess;
-        private DateTime _startTime;
-        private long _bytesRecorded;
-        private System.Timers.Timer _statsTimer;
-        private string _lastRecordedFile;
-        private string _detectedQuality;
-        private CancellationTokenSource _cancellationTokenSource;
-        private bool _isMonitoring;
-        private long _lastBytesRecorded;
-        private DateTime _lastStatsUpdate;
-
-        public string LastDetectedQuality => _detectedQuality ?? "best";
+        private CancellationTokenSource _monitoringCts;
+        private bool _isRecording;
+        private DateTime _recordingStartTime;
+        private long _lastFileSize;
+        private string _currentStreamUrl;
+        private StreamInfo _currentStreamInfo;
 
         public StreamRecorderService(
+            IExecutableLocator executableLocator,
             ILogger<StreamRecorderService> logger,
-            ILogAction logAction,
-            IStatsAction statsAction)
+            ILoggerFactory loggerFactory,
+            RecordingStatsLogger statsLogger,
+            VideoConverter videoConverter,
+            Action<string> log)
         {
+            _executableLocator = executableLocator;
             _logger = logger;
-            _log = logAction;
-            _stats = statsAction;
-            _locator = new ExecutableLocator(msg => _log.Log(msg));
-            _fileHelper = new FileHelper(msg => _log.Log(msg));
-            _converter = new VideoConverter(msg => _log.Log(msg), _locator);
+            _statsLogger = statsLogger;
+            _videoConverter = videoConverter;
+            _log = log;
 
-            // Initialiser les détecteurs
-            _detectors = new List<IStreamDetector>
+            _detectors = new Dictionary<string, IStreamDetector>
             {
-                new YouTubeStreamDetector(msg => _log.Log(msg), _locator),
-                new TwitchStreamDetector(msg => _log.Log(msg), _locator),
-                new KickStreamDetector(msg => _log.Log(msg), _locator),
-                new TrovoStreamDetector(msg => _log.Log(msg), _locator),
-                new DLiveStreamDetector(msg => _log.Log(msg), _locator),
-                new FacebookGamingStreamDetector(msg => _log.Log(msg), _locator),
-                new NimoTVStreamDetector(msg => _log.Log(msg), _locator),
-                new AfreecaTVStreamDetector(msg => _log.Log(msg), _locator),
-                new BilibiliStreamDetector(msg => _log.Log(msg), _locator),
-                new VKPlayLiveStreamDetector(msg => _log.Log(msg), _locator),
-                new NiconicoStreamDetector(msg => _log.Log(msg), _locator)
+                { "twitch", new TwitchStreamDetector(_logger, _executableLocator) },
+                { "kick", new KickStreamDetector(_logger, _executableLocator) },
+                { "trovo", new TrovoStreamDetector(_logger, _executableLocator) },
+                { "dlive", new DLiveStreamDetector(_logger, _executableLocator) },
+                { "facebook", new FacebookGamingStreamDetector(_logger, _executableLocator) },
+                { "nimo", new NimoTVStreamDetector(_logger, _executableLocator) },
+                { "afreeca", new AfreecaTVStreamDetector(_logger, _executableLocator) },
+                { "bilibili", new BilibiliStreamDetector(_logger, _executableLocator) },
+                { "vkplay", new VKPlayLiveStreamDetector(_logger, _executableLocator) },
+                { "niconico", new NiconicoStreamDetector(_logger, _executableLocator) }
             };
         }
 
         public async Task<bool> CheckDependencies()
         {
-            return !string.IsNullOrEmpty(_locator.FindExecutablePath("streamlink"))
-                && !string.IsNullOrEmpty(_locator.FindExecutablePath("ffmpeg"));
+            try
+            {
+                string streamlinkPath = _executableLocator.FindExecutable("streamlink");
+                string ffmpegPath = _executableLocator.FindExecutable("ffmpeg");
+
+                if (string.IsNullOrEmpty(streamlinkPath))
+                {
+                    _logger.LogError("Streamlink non trouvé");
+                    return false;
+                }
+
+                if (string.IsNullOrEmpty(ffmpegPath))
+                {
+                    _logger.LogError("FFmpeg non trouvé");
+                    return false;
+                }
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Erreur lors de la vérification des dépendances");
+                return false;
+            }
         }
 
-        public async Task<StreamInfo> GetLiveStreamInfo(string url)
+        public async Task<StreamInfo> GetStreamInfo(string url)
         {
-            foreach (var detector in _detectors)
+            foreach (var detector in _detectors.Values)
             {
                 if (detector.CanHandle(url))
                 {
-                    return await detector.DetectStream(url);
+                    return await detector.GetStreamInfoAsync(url);
                 }
             }
 
-            _log.Log($"Aucun détecteur ne peut gérer l'URL: {url}");
-            return new StreamInfo { IsLive = false };
-        }
-
-        public async Task<bool> RecordStream(string url, CancellationToken token)
-        {
-            var streamInfo = await GetLiveStreamInfo(url);
-            if (!streamInfo.IsLive)
+            return new StreamInfo
             {
-                _log.Log("Aucun stream en direct détecté");
-                return false;
-            }
-
-            _log.Log($"Stream détecté: {streamInfo.StreamerName} - {streamInfo.Title}");
-            _log.Log($"Qualité demandée: {streamInfo.Quality}");
-
-            string safeName = _fileHelper.SanitizeFileName(streamInfo.ChannelName);
-            string outputDir = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.MyVideos),
-                "recordings", streamInfo.Platform, safeName);
-
-            if (!await _fileHelper.EnsureDirectoryWritableAsync(outputDir))
-                return false;
-
-            string timestamp = DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss");
-            string outputFile = Path.Combine(outputDir, $"{timestamp}.ts");
-            _lastRecordedFile = outputFile;
-
-            string args = $"\"{url}\" {streamInfo.Quality} --force -o \"{outputFile}\" --retry-streams 30 --retry-max 10 --loglevel debug";
-            _log.Log($"Commande Streamlink: {args}");
-
-            _startTime = DateTime.Now;
-            _bytesRecorded = 0;
-            _lastBytesRecorded = 0;
-            _lastStatsUpdate = DateTime.Now;
-
-            var startInfo = new ProcessStartInfo
-            {
-                FileName = _locator.FindExecutablePath("streamlink"),
-                Arguments = args,
-                UseShellExecute = false,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                CreateNoWindow = true
+                StreamUrl = url,
+                Platform = "Unknown",
+                IsLive = false,
+                ErrorMessage = "Plateforme non supportée",
+                DetectionTime = DateTime.Now
             };
-
-            _currentProcess = Process.Start(startInfo);
-            if (_currentProcess == null)
-            {
-                _log.Log("ERREUR: Impossible de démarrer Streamlink");
-                return false;
-            }
-
-            _statsTimer = new System.Timers.Timer(1000);
-            _statsTimer.Elapsed += (s, e) =>
-            {
-                try
-                {
-                    if (File.Exists(outputFile))
-                    {
-                        long size = new FileInfo(outputFile).Length;
-                        if (size > _bytesRecorded)
-                        {
-                            var now = DateTime.Now;
-                            var timeDiff = (now - _lastStatsUpdate).TotalSeconds;
-                            var bytesDiff = size - _lastBytesRecorded;
-                            string speedStr = "N/A";
-                            if (timeDiff > 0 && bytesDiff > 0)
-                            {
-                                var speed = bytesDiff / timeDiff; // bytes per second
-                                speedStr = $"{speed / 1024.0 / 1024.0:F2} MB/s";
-                            }
-                            _bytesRecorded = size;
-                            _lastBytesRecorded = size;
-                            _lastStatsUpdate = now;
-
-                            var duration = now - _startTime;
-                            var stats = $"Durée: {duration:hh\\:mm\\:ss} | " +
-                                      $"Taille: {size / 1024.0 / 1024.0:F2} MB | " +
-                                      $"Vitesse: {speedStr}";
-                            _stats.Log(stats);
-                        }
-                    }
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Erreur lors de la mise à jour des statistiques");
-                }
-            };
-            _statsTimer.Start();
-
-            _currentProcess.OutputDataReceived += (s, e) =>
-            {
-                if (!string.IsNullOrWhiteSpace(e.Data))
-                {
-                    if (e.Data.Contains("Found matching stream:"))
-                    {
-                        _detectedQuality = e.Data.Split(':')[1].Trim();
-                        _log.Log($"Qualité réelle détectée : {_detectedQuality}");
-                    }
-                    else if (e.Data.Contains("[cli][info] Opening stream:"))
-                    {
-                        // Extraire la qualité réelle
-                        var parts = e.Data.Split(":");
-                        if (parts.Length > 1)
-                        {
-                            var qualityPart = parts[1].Trim();
-                            var quality = qualityPart.Split(' ')[0]; // ex: '1080p'
-                            _detectedQuality = quality;
-                            _log.Log($"Qualité réelle détectée : {_detectedQuality}");
-                        }
-                    }
-                    else if (e.Data.Contains("Stream ended"))
-                    {
-                        _log.Log("Le stream est terminé");
-                    }
-                    else if (e.Data.Contains("error:"))
-                    {
-                        _log.Log($"[ERREUR] {e.Data}");
-                    }
-                    else if (!e.Data.Contains("[stream.hls][debug]"))
-                    {
-                        _log.Log($"[Streamlink] {e.Data}");
-                    }
-                }
-            };
-            _currentProcess.BeginOutputReadLine();
-            _currentProcess.BeginErrorReadLine();
-
-            try
-            {
-                await _currentProcess.WaitForExitAsync(token);
-            }
-            catch (OperationCanceledException)
-            {
-                _log.Log("Enregistrement annulé par l'utilisateur");
-                throw;
-            }
-            finally
-            {
-                _statsTimer?.Stop();
-                _statsTimer?.Dispose();
-            }
-
-            if (!File.Exists(outputFile) || new FileInfo(outputFile).Length == 0)
-            {
-                _log.Log("ERREUR: Fichier de sortie invalide");
-                return false;
-            }
-
-            _log.Log("Début de la conversion en MP4...");
-            return await _converter.ConvertToMp4(outputFile);
-        }
-
-        public void StopRecording()
-        {
-            try
-            {
-                if (_currentProcess != null && !_currentProcess.HasExited)
-                {
-                    _log.Log("Arrêt du processus Streamlink...");
-                    _currentProcess.Kill();
-                    _log.Log("Processus arrêté");
-                }
-            }
-            catch (Exception ex)
-            {
-                _log.Log($"Erreur lors de l'arrêt: {ex.Message}");
-            }
-
-            try
-            {
-                if (!string.IsNullOrEmpty(_lastRecordedFile) && File.Exists(_lastRecordedFile))
-                {
-                    _log.Log("Conversion du fichier .ts arrêté manuellement...");
-                    _converter.ConvertToMp4(_lastRecordedFile);
-                }
-            }
-            catch (Exception ex)
-            {
-                _log.Log($"Erreur lors de la conversion post-arrêt: {ex.Message}");
-            }
-        }
-
-        public async Task<bool> ConvertToMp4(string tsPath)
-        {
-            return await _converter.ConvertToMp4(tsPath);
         }
 
         public async Task StartMonitoringAsync(string url, CancellationToken cancellationToken)
         {
-            if (_isMonitoring)
-            {
-                throw new InvalidOperationException("La surveillance est déjà en cours");
-            }
+            _currentStreamUrl = url;
+            _monitoringCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
-            _isMonitoring = true;
-            _cancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-
-            try
+            while (!_monitoringCts.Token.IsCancellationRequested)
             {
-                while (!_cancellationTokenSource.Token.IsCancellationRequested)
+                try
                 {
-                    try
+                    _currentStreamInfo = await GetStreamInfo(url);
+
+                    if (_currentStreamInfo.IsLive && !_isRecording)
                     {
-                        var streamInfo = await GetLiveStreamInfo(url);
-                        if (streamInfo.IsLive)
-                        {
-                            _logger.LogInformation($"Stream détecté: {streamInfo.StreamerName} - {streamInfo.Title}");
-                            _log.Log($"Stream détecté: {streamInfo.StreamerName} - {streamInfo.Title}");
-                            
-                            // Démarrer l'enregistrement
-                            await RecordStream(url, _cancellationTokenSource.Token);
-                            
-                            // Si l'enregistrement est terminé (stream terminé), on continue la surveillance
-                            _log.Log("Retour en mode surveillance...");
-                        }
-                        else
-                        {
-                            _log.Log("Aucun stream en direct détecté, nouvelle tentative dans 1 minute...");
-                        }
+                        await StartRecording(url);
                     }
-                    catch (OperationCanceledException)
+                    else if (!_currentStreamInfo.IsLive && _isRecording)
                     {
-                        throw;
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogError(ex, "Erreur lors de la surveillance");
-                        _log.Log($"Erreur lors de la surveillance: {ex.Message}");
+                        StopRecording();
                     }
 
-                    // Attendre 1 minute avant la prochaine vérification
-                    await Task.Delay(TimeSpan.FromMinutes(1), _cancellationTokenSource.Token);
+                    await Task.Delay(TimeSpan.FromSeconds(30), _monitoringCts.Token);
                 }
-            }
-            finally
-            {
-                _isMonitoring = false;
-                _cancellationTokenSource?.Dispose();
-                _cancellationTokenSource = null;
+                catch (OperationCanceledException)
+                {
+                    break;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Erreur lors de la surveillance");
+                    await Task.Delay(TimeSpan.FromSeconds(30), _monitoringCts.Token);
+                }
             }
         }
 
         public void StopMonitoring()
         {
-            _cancellationTokenSource?.Cancel();
+            _monitoringCts?.Cancel();
             StopRecording();
-            _isMonitoring = false;
+        }
+
+        private async Task StartRecording(string url)
+        {
+            if (_isRecording) return;
+
+            try
+            {
+                string streamlinkPath = _executableLocator.FindExecutable("streamlink");
+                string recordingsDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyVideos), "recordings");
+                Directory.CreateDirectory(recordingsDir);
+
+                string outputFile = Path.Combine(recordingsDir, "temp.ts");
+                string arguments = $"--stream-segment-threads 2 --hls-live-edge 1 --hls-segment-timeout 30 --hls-timeout 60 --retry-streams 5 --retry-open 5 --retry-max 5 --player-external-http --player-external-http-port 0 \"{url}\" best -o \"{outputFile}\"";
+
+                _currentProcess = new Process
+                {
+                    StartInfo = new ProcessStartInfo
+                    {
+                        FileName = streamlinkPath,
+                        Arguments = arguments,
+                        UseShellExecute = false,
+                        RedirectStandardOutput = true,
+                        RedirectStandardError = true,
+                        CreateNoWindow = true
+                    },
+                    EnableRaisingEvents = true
+                };
+
+                _currentProcess.OutputDataReceived += (sender, e) =>
+                {
+                    if (!string.IsNullOrEmpty(e.Data))
+                        _logger.LogInformation(e.Data);
+                };
+
+                _currentProcess.ErrorDataReceived += (sender, e) =>
+                {
+                    if (!string.IsNullOrEmpty(e.Data))
+                        _logger.LogError(e.Data);
+                };
+
+                _currentProcess.Exited += (sender, e) =>
+                {
+                    if (_isRecording)
+                    {
+                        _logger.LogWarning("Processus d'enregistrement terminé inopinément");
+                        StopRecording();
+                    }
+                };
+
+                _currentProcess.Start();
+                _currentProcess.BeginOutputReadLine();
+                _currentProcess.BeginErrorReadLine();
+
+                _isRecording = true;
+                _recordingStartTime = DateTime.Now;
+                _lastFileSize = 0;
+
+                _logger.LogInformation($"Démarrage de l'enregistrement pour {url}");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Erreur lors du démarrage de l'enregistrement");
+                StopRecording();
+            }
+        }
+
+        public async Task<bool> StopRecording()
+        {
+            try
+            {
+                if (_currentProcess == null || _currentProcess.HasExited)
+                {
+                    _logger.LogWarning("Aucun enregistrement en cours");
+                    return false;
+                }
+
+                _logger.LogInformation("Arrêt de l'enregistrement en cours...");
+                _currentProcess.StandardInput.WriteLine("q");
+
+                if (!_currentProcess.WaitForExit(10000))
+                {
+                    _logger.LogWarning("Le processus n'a pas répondu au signal d'arrêt, tentative de terminaison forcée");
+                    _currentProcess.Kill();
+                }
+
+                _currentProcess.Dispose();
+                _currentProcess = null;
+
+                _logger.LogInformation("Enregistrement arrêté avec succès");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Erreur lors de l'arrêt de l'enregistrement");
+                return false;
+            }
+        }
+
+        public async Task<bool> ConvertToMp4(string tsFile)
+        {
+            try
+            {
+                string ffmpegPath = _executableLocator.FindExecutable("ffmpeg");
+                string mp4File = Path.ChangeExtension(tsFile, ".mp4");
+
+                var process = new Process
+                {
+                    StartInfo = new ProcessStartInfo
+                    {
+                        FileName = ffmpegPath,
+                        Arguments = $"-i \"{tsFile}\" -c copy \"{mp4File}\"",
+                        UseShellExecute = false,
+                        RedirectStandardOutput = true,
+                        RedirectStandardError = true,
+                        CreateNoWindow = true
+                    }
+                };
+
+                process.Start();
+                await process.WaitForExitAsync();
+
+                if (process.ExitCode == 0)
+                {
+                    File.Delete(tsFile);
+                    return true;
+                }
+
+                return false;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Erreur lors de la conversion");
+                return false;
+            }
+        }
+
+        public async Task<bool> RecordStream(string url, string outputPath, string platform)
+        {
+            try
+            {
+                var streamlinkPath = _executableLocator.FindExecutable("streamlink");
+                if (string.IsNullOrEmpty(streamlinkPath))
+                {
+                    _logger.LogError("Streamlink non trouvé");
+                    return false;
+                }
+
+                var startInfo = new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = streamlinkPath,
+                    Arguments = $"\"{url}\" best -o \"{outputPath}\"",
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    CreateNoWindow = true
+                };
+
+                using var process = System.Diagnostics.Process.Start(startInfo);
+                var output = await process.StandardOutput.ReadToEndAsync();
+                var error = await process.StandardError.ReadToEndAsync();
+                await process.WaitForExitAsync();
+
+                if (process.ExitCode != 0)
+                {
+                    _logger.LogError($"Erreur lors de l'enregistrement du stream : {error}");
+                    return false;
+                }
+
+                await _statsLogger.LogRecordingStatsAsync(url, outputPath, platform);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Erreur lors de l'enregistrement du stream");
+                return false;
+            }
+        }
+
+        public async Task<bool> ConvertRecording(string inputPath)
+        {
+            try
+            {
+                var outputPath = inputPath.Replace(".ts", ".mp4");
+                return await _videoConverter.ConvertVideoAsync(inputPath, outputPath);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Erreur lors de la conversion de l'enregistrement");
+                return false;
+            }
         }
     }
 }

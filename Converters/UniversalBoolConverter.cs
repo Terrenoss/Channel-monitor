@@ -1,11 +1,10 @@
 using System;
 using System.Globalization;
-using System.Windows;
-using System.Windows.Data;
+using Avalonia.Data.Converters;
+using Avalonia;
 
-namespace AutoStreamRec.Converters
+namespace Strivea.Converters
 {
-    [ValueConversion(typeof(bool), typeof(object))]
     public class UniversalBoolConverter : IValueConverter
     {
         // Mode de conversion par défaut (InverseBool)
@@ -15,39 +14,78 @@ namespace AutoStreamRec.Converters
         public bool ToVisibility { get; set; }
         
         // Pour les valeurs nulles (optionnel)
-        public object NullValue { get; set; } = DependencyProperty.UnsetValue;
+        public object NullValue { get; set; } = AvaloniaProperty.UnsetValue;
 
         public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
         {
-            if (value == null) return NullValue;
+            bool result;
 
-            bool boolValue;
-            if (value is bool b)
-                boolValue = b;
-            else if (value is bool?)
-                boolValue = (value as bool?) ?? false;
-            else
-                return NullValue;
+            switch (value)
+            {
+                case bool boolValue:
+                    result = boolValue;
+                    break;
+                case string stringValue:
+                    result = !string.IsNullOrWhiteSpace(stringValue);
+                    break;
+                case int intValue:
+                    result = intValue != 0;
+                    break;
+                case double doubleValue:
+                    result = doubleValue != 0;
+                    break;
+                case DateTime dateTimeValue:
+                    result = dateTimeValue != DateTime.MinValue;
+                    break;
+                default:
+                    result = value != null;
+                    break;
+            }
 
-            // Application de l'inversion si demandée
-            bool result = InverseBool ? !boolValue : boolValue;
+            if (InverseBool)
+            {
+                result = !result;
+            }
 
-            // Conversion en Visibility si demandé
             if (ToVisibility)
+            {
                 return result ? Visibility.Visible : Visibility.Collapsed;
+            }
 
             return result;
         }
 
         public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
         {
-            if (ToVisibility && value is Visibility visibility)
-                return InverseBool ? visibility != Visibility.Visible : visibility == Visibility.Visible;
-
             if (value is bool boolValue)
-                return InverseBool ? !boolValue : boolValue;
+            {
+                if (InverseBool)
+                {
+                    boolValue = !boolValue;
+                }
 
-            return NullValue;
+                if (targetType == typeof(string))
+                {
+                    return boolValue.ToString();
+                }
+                else if (targetType == typeof(int))
+                {
+                    return boolValue ? 1 : 0;
+                }
+                else if (targetType == typeof(double))
+                {
+                    return boolValue ? 1.0 : 0.0;
+                }
+            }
+
+            throw new NotSupportedException($"Conversion non supportée de {value} vers {targetType}");
+        }
+
+        // Ajout d'une énumération interne pour remplacer Visibility de WPF
+        public enum Visibility
+        {
+            Visible,
+            Collapsed
         }
     }
 }

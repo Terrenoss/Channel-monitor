@@ -1,9 +1,9 @@
-using AutoStreamRec.Services;
+using Strivea.Services;
 using System;
 using System.IO;
 using System.Threading.Tasks;
 
-namespace AutoStreamRec.ViewModels
+namespace Strivea.ViewModels
 {
     public class ConvertCommandHandler
     {

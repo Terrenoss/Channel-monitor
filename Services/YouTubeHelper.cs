@@ -1,56 +1,105 @@
+using System;
 using System.Diagnostics;
-using System.IO;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 
-namespace AutoStreamRec.Services
+namespace Strivea.Services
 {
     public class YouTubeHelper
     {
-        private readonly ExecutableLocator _locator;
+        private readonly ILogger<YouTubeHelper> _logger;
+        private readonly ExecutableLocator _executableLocator;
 
-        public YouTubeHelper(ExecutableLocator locator)
+        public YouTubeHelper(ILogger<YouTubeHelper> logger, ExecutableLocator executableLocator)
         {
-            _locator = locator;
+            _logger = logger;
+            _executableLocator = executableLocator;
         }
 
-        public async Task<string> GetChannelNameAsync(string youtubeUrl)
+        public async Task<string> GetChannelNameAsync(string url)
         {
-            if (youtubeUrl.Contains("@"))
+            try
             {
-                int atIndex = youtubeUrl.IndexOf('@');
-                int nextSlash = youtubeUrl.IndexOf('/', atIndex);
-
-                if (nextSlash == -1)
-                    return youtubeUrl.Substring(atIndex + 1);
-
-                return youtubeUrl.Substring(atIndex + 1, nextSlash - atIndex - 1);
-            }
-
-            string ytDlpPath = _locator.FindExecutablePath("yt-dlp");
-            if (!string.IsNullOrEmpty(ytDlpPath))
-            {
-                try
+                var ytDlpPath = _executableLocator.FindExecutable("yt-dlp");
+                if (string.IsNullOrEmpty(ytDlpPath))
                 {
-                    var startInfo = new ProcessStartInfo
-                    {
-                        FileName = ytDlpPath,
-                        Arguments = $"\"{youtubeUrl}\" --print \"%(channel)s\" --no-warnings",
-                        RedirectStandardOutput = true,
-                        UseShellExecute = false,
-                        CreateNoWindow = true
-                    };
-
-                    using var process = Process.Start(startInfo);
-                    string output = await process.StandardOutput.ReadToEndAsync();
-                    await process.WaitForExitAsync();
-
-                    if (!string.IsNullOrWhiteSpace(output))
-                        return output.Trim();
+                    _logger.LogError("yt-dlp non trouvé");
+                    return null;
                 }
-                catch { }
-            }
 
-            return "Unknown_Channel";
+                var startInfo = new ProcessStartInfo
+                {
+                    FileName = ytDlpPath,
+                    Arguments = $"--skip-download --print channel {url}",
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    CreateNoWindow = true
+                };
+
+                using var process = new Process { StartInfo = startInfo };
+                process.Start();
+
+                var output = await process.StandardOutput.ReadToEndAsync();
+                var error = await process.StandardError.ReadToEndAsync();
+                await process.WaitForExitAsync();
+
+                if (process.ExitCode != 0)
+                {
+                    _logger.LogError($"Erreur yt-dlp : {error}");
+                    return null;
+                }
+
+                return output.Trim();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Erreur lors de la récupération du nom de la chaîne");
+                return null;
+            }
+        }
+
+        public async Task<string> GetStreamTitleAsync(string url)
+        {
+            try
+            {
+                var ytDlpPath = _executableLocator.FindExecutable("yt-dlp");
+                if (string.IsNullOrEmpty(ytDlpPath))
+                {
+                    _logger.LogError("yt-dlp non trouvé");
+                    return null;
+                }
+
+                var startInfo = new ProcessStartInfo
+                {
+                    FileName = ytDlpPath,
+                    Arguments = $"--skip-download --print title {url}",
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    CreateNoWindow = true
+                };
+
+                using var process = new Process { StartInfo = startInfo };
+                process.Start();
+
+                var output = await process.StandardOutput.ReadToEndAsync();
+                var error = await process.StandardError.ReadToEndAsync();
+                await process.WaitForExitAsync();
+
+                if (process.ExitCode != 0)
+                {
+                    _logger.LogError($"Erreur yt-dlp : {error}");
+                    return null;
+                }
+
+                return output.Trim();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Erreur lors de la récupération du titre du stream");
+                return null;
+            }
         }
     }
 }

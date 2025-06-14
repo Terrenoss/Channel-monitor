@@ -1,0 +1,40 @@
+﻿<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:Strivea.ViewModels"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:converters="using:Strivea.Converters"
+        mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
+        x:Class="Strivea.Views.MainWindow"
+        x:DataType="vm:MainViewModel"
+        Icon="/Assets/logo-strivea.ico"
+        Title="Strivea">
+
+    <Window.Resources>
+        <converters:UniversalBoolConverter x:Key="BoolConverter" />
+    </Window.Resources>
+
+    <Grid RowDefinitions="Auto,*,Auto" Margin="10">
+        <StackPanel Grid.Row="0" Spacing="10">
+            <TextBox Text="{Binding StreamUrl}" Watermark="URL du stream" />
+            <TextBox Text="{Binding OutputDirectory}" Watermark="Répertoire de sortie" />
+        </StackPanel>
+
+        <ScrollViewer Grid.Row="1" Margin="0,10">
+            <ItemsControl ItemsSource="{Binding ActivityLogs}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <TextBlock Text="{Binding}" TextWrapping="Wrap" />
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+
+        <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="10">
+            <Button Content="Vérifier les dépendances" Command="{Binding CheckDependenciesCommand}" />
+            <Button Content="Démarrer" Command="{Binding StartMonitoringCommand}" />
+            <Button Content="Arrêter" Command="{Binding StopMonitoringCommand}" />
+            <Button Content="Nettoyer" Command="{Binding CleanupCommand}" />
+        </StackPanel>
+    </Grid>
+</Window>

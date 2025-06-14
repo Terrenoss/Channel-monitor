@@ -1,50 +1,65 @@
+using System;
 using System.Threading.Tasks;
-using AutoStreamRec.Models;
+using Microsoft.Extensions.Logging;
+using System.Linq;
+using Strivea.Models;
 
-namespace AutoStreamRec.Services
+namespace Strivea.Services
 {
     public class DLiveStreamDetector : BaseStreamDetector
     {
-        public DLiveStreamDetector(Action<string> logAction, ExecutableLocator locator)
-            : base(logAction, locator)
+        public DLiveStreamDetector(ILogger logger, IExecutableLocator executableLocator)
+            : base(logger, executableLocator)
         {
         }
 
         public override bool CanHandle(string url)
         {
-            return url.Contains("dlive.tv");
+            return !string.IsNullOrEmpty(url) && url.Contains("dlive.tv");
         }
 
-        protected override string GetPlatformName()
+        public override async Task<StreamInfo> GetStreamInfoAsync(string url)
         {
-            return "DLive";
-        }
-
-        public override async Task<StreamInfo> DetectStream(string url)
-        {
-            var streamInfo = new StreamInfo
+            try
             {
-                IsLive = true,
-                Platform = GetPlatformName(),
-                DetectionTime = DateTime.Now,
-                Url = url
-            };
+                _logger.LogInformation($"Récupération des informations du stream DLive pour : {url}");
 
-            // Extraire le nom de la chaîne
-            if (url.Contains("dlive.tv/"))
-            {
-                int startIndex = url.IndexOf("dlive.tv/") + 9;
-                int endIndex = url.IndexOf('/', startIndex);
-                streamInfo.ChannelName = endIndex == -1 
-                    ? url.Substring(startIndex)
-                    : url.Substring(startIndex, endIndex - startIndex);
+                var streamlinkPath = _executableLocator.FindExecutable("streamlink");
+                if (string.IsNullOrEmpty(streamlinkPath))
+                {
+                    _logger.LogError("Streamlink non trouvé");
+                    return new StreamInfo
+                    {
+                        ChannelName = url.Split('/').Last(),
+                        StreamUrl = url,
+                        Title = "Erreur : Streamlink non trouvé",
+                        IsLive = false
+                    };
+                }
+
+                // TODO: Implémenter la détection réelle avec streamlink
+                // Pour l'instant, on simule une détection
+                await Task.Delay(1000);
+
+                return new StreamInfo
+                {
+                    ChannelName = url.Split('/').Last(),
+                    StreamUrl = url,
+                    Title = "Stream DLive en direct",
+                    IsLive = true
+                };
             }
-            else
+            catch (Exception ex)
             {
-                streamInfo.ChannelName = "Unknown_Channel";
+                _logger.LogError(ex, $"Erreur lors de la récupération des informations du stream DLive pour {url}");
+                return new StreamInfo
+                {
+                    ChannelName = url.Split('/').Last(),
+                    StreamUrl = url,
+                    Title = $"Erreur : {ex.Message}",
+                    IsLive = false
+                };
             }
-
-            return streamInfo;
         }
     }
 } 

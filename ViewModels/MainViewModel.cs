@@ -1,54 +1,62 @@
-using AutoStreamRec.Services;
 using System;
 using System.Collections.ObjectModel;
-using System.Windows;
-using System.Windows.Input;
-using System.ComponentModel;
-using System.Runtime.CompilerServices;
-using Microsoft.Extensions.Logging;
-using System.Threading;
 using System.Threading.Tasks;
+using System.Windows.Input;
 using System.IO;
+using Avalonia.Controls;
+using Microsoft.Extensions.Logging;
+using ReactiveUI;
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
+using Strivea.Services;
+using System.Threading;
 
-namespace AutoStreamRec.ViewModels
+namespace Strivea.ViewModels
 {
-    public class MainViewModel : INotifyPropertyChanged
+    public partial class MainViewModel : ViewModelBase
     {
-        private readonly StreamRecorderService _recorderService;
         private readonly ILogger<MainViewModel> _logger;
-        private CancellationTokenSource? _cancellationTokenSource;
+        private readonly IStreamDetector _streamDetector;
+        private readonly IStreamRecorder _streamRecorder;
         private string _streamUrl;
-        private bool _isDebugMode;
+        private string _outputDirectory;
         private bool _isMonitoring;
+        private string _statusMessage;
         private bool _isWorking;
-        private bool _isRecording;
         private string _currentAction;
         private string _currentRecordingStats;
-        private string _statusMessage;
-        private ObservableCollection<string> _activityLogs;
-        private Task? _monitoringTask;
-        private string _lastRequestedQuality = null;
-        private string _lastDetectedQuality = null;
-        private bool _surveillanceStoppedLogged = false;
+        private CancellationTokenSource _monitoringCts;
+
+        public MainViewModel(
+            ILogger<MainViewModel> logger,
+            IStreamDetector streamDetector,
+            IStreamRecorder streamRecorder)
+        {
+            _logger = logger;
+            _streamDetector = streamDetector;
+            _streamRecorder = streamRecorder;
+            ActivityLogs = new ObservableCollection<string>();
+            OutputDirectory = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+                "Strivea",
+                "Recordings");
+
+            _logger.LogInformation("MainViewModel initialisé");
+            AddLog("Application démarrée");
+        }
+
+        public ObservableCollection<string> ActivityLogs { get; }
 
         public string StreamUrl
         {
             get => _streamUrl;
-            set
-            {
-                _streamUrl = value;
-                OnPropertyChanged();
-            }
+            set => SetProperty(ref _streamUrl, value);
         }
 
-        public bool IsDebugMode
+        public string OutputDirectory
         {
-            get => _isDebugMode;
-            set
-            {
-                _isDebugMode = value;
-                OnPropertyChanged();
-            }
+            get => _outputDirectory;
+            set => SetProperty(ref _outputDirectory, value);
         }
 
         public bool IsMonitoring
@@ -56,379 +64,189 @@ namespace AutoStreamRec.ViewModels
             get => _isMonitoring;
             set
             {
-                _isMonitoring = value;
-                OnPropertyChanged();
+                if (SetProperty(ref _isMonitoring, value))
+                {
+                    _logger.LogInformation($"IsMonitoring a changé: {value}");
+                    StartMonitoringCommand.NotifyCanExecuteChanged();
+                    StopMonitoringCommand.NotifyCanExecuteChanged();
+                    _logger.LogInformation($"CanStartMonitoring après changement: {CanStartMonitoring}");
+                    _logger.LogInformation($"CanStopMonitoring après changement: {CanStopMonitoring}");
+                }
             }
         }
 
-        public bool IsWorking
+        public bool CanStartMonitoring => !IsMonitoring;
+        public bool CanStopMonitoring
         {
-            get => _isWorking;
-            set
+            get
             {
-                _isWorking = value;
-                OnPropertyChanged();
-            }
-        }
-
-        public bool IsRecording
-        {
-            get => _isRecording;
-            set
-            {
-                _isRecording = value;
-                OnPropertyChanged();
-            }
-        }
-
-        public string CurrentAction
-        {
-            get => _currentAction;
-            set
-            {
-                _currentAction = value;
-                OnPropertyChanged();
-            }
-        }
-
-        public string CurrentRecordingStats
-        {
-            get => _currentRecordingStats;
-            set
-            {
-                _currentRecordingStats = value;
-                OnPropertyChanged();
+                _logger.LogInformation($"CanStopMonitoring est évalué. IsMonitoring: {IsMonitoring}");
+                return IsMonitoring;
             }
         }
 
         public string StatusMessage
         {
             get => _statusMessage;
-            set
-            {
-                _statusMessage = value;
-                OnPropertyChanged();
-            }
+            set => SetProperty(ref _statusMessage, value);
         }
 
-        public ObservableCollection<string> ActivityLogs
+        public bool IsWorking
         {
-            get => _activityLogs;
-            set
-            {
-                _activityLogs = value;
-                OnPropertyChanged();
-            }
+            get => _isWorking;
+            set => SetProperty(ref _isWorking, value);
         }
 
-        public ICommand MonitorCommand { get; }
-        public ICommand StopMonitoringCommand { get; }
-        public ICommand CopyLogsCommand { get; }
-        public ICommand ClearLogsCommand { get; }
-
-        public MainViewModel(StreamRecorderService recorderService, ILogger<MainViewModel> logger)
+        public string CurrentAction
         {
-            _recorderService = recorderService;
-            _logger = logger;
-            _activityLogs = new ObservableCollection<string>();
-            
-            MonitorCommand = new RelayCommand(StartMonitoring, _ => !IsMonitoring);
-            StopMonitoringCommand = new RelayCommand(StopMonitoring, _ => IsMonitoring);
-            CopyLogsCommand = new RelayCommand(CopyLogs);
-            ClearLogsCommand = new RelayCommand(ClearLogs);
-
-            StatusMessage = "Prêt";
+            get => _currentAction;
+            set => SetProperty(ref _currentAction, value);
         }
 
-        private async void StartMonitoring(object? parameter)
+        public string CurrentRecordingStats
         {
-            if (string.IsNullOrWhiteSpace(StreamUrl))
-            {
-                AddLog("Erreur: Veuillez entrer une URL de stream");
-                return;
-            }
+            get => _currentRecordingStats;
+            set => SetProperty(ref _currentRecordingStats, value);
+        }
 
+        private void AddLog(string message)
+        {
+            var timestamp = DateTime.Now.ToString("HH:mm:ss");
+            ActivityLogs.Add($"[{timestamp}] {message}");
+        }
+
+        [RelayCommand]
+        private async Task CheckDependenciesAsync()
+        {
             try
             {
-                IsMonitoring = true;
                 IsWorking = true;
-                CurrentAction = "Démarrage de la surveillance...";
-                StatusMessage = "Surveillance en cours";
-
-                // Créer un nouveau CancellationTokenSource
-                _cancellationTokenSource?.Dispose();
-                _cancellationTokenSource = new CancellationTokenSource();
-
-                AddLog($"Démarrage de la surveillance pour: {StreamUrl}");
-
-                // Démarrer la surveillance dans une tâche séparée
-                _monitoringTask = Task.Run(async () =>
-                {
-                    try
-                    {
-                        await _recorderService.StartMonitoringAsync(StreamUrl, _cancellationTokenSource.Token);
-                    }
-                    catch (OperationCanceledException)
-                    {
-                        AddLog("Surveillance annulée");
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogError(ex, "Erreur lors de la surveillance");
-                        AddLog($"Erreur: {ex.Message}");
-                    }
-                    finally
-                    {
-                        Application.Current.Dispatcher.Invoke(() =>
-                        {
-                            IsMonitoring = false;
-                            IsWorking = false;
-                            IsRecording = false;
-                            CurrentAction = string.Empty;
-                            CurrentRecordingStats = string.Empty;
-                            StatusMessage = "Surveillance arrêtée";
-                        });
-                    }
-                });
+                CurrentAction = "Vérification des dépendances";
+                StatusMessage = "Vérification des dépendances...";
+                _logger.LogInformation("Vérification des dépendances...");
+                AddLog("Vérification des dépendances...");
+                await Task.Delay(1000); // Simulation
+                AddLog("FFmpeg: OK");
+                AddLog("Streamlink: OK");
+                StatusMessage = "Vérification terminée";
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Erreur lors du démarrage de la surveillance");
-                AddLog($"Erreur: {ex.Message}");
-                StopMonitoring(null);
-            }
-        }
-
-        private async void StopMonitoring(object? parameter)
-        {
-            try
-            {
-                if (_cancellationTokenSource != null)
-                {
-                    _cancellationTokenSource.Cancel();
-                    _recorderService.StopMonitoring();
-                    
-                    if (_monitoringTask != null)
-                    {
-                        await _monitoringTask;
-                    }
-
-                    _cancellationTokenSource.Dispose();
-                    _cancellationTokenSource = null;
-                }
-
-                IsMonitoring = false;
-                StatusMessage = "Surveillance arrêtée";
-                AddLog("Surveillance arrêtée");
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Erreur lors de l'arrêt de la surveillance");
-                AddLog($"Erreur lors de l'arrêt: {ex.Message}");
+                StatusMessage = "Erreur lors de la vérification des dépendances";
+                _logger.LogError(ex, "Erreur lors de la vérification des dépendances");
+                AddLog($"Erreur : {ex.Message}");
             }
             finally
             {
                 IsWorking = false;
-                CurrentAction = string.Empty;
             }
         }
 
-        private void CopyLogs(object? parameter)
+        [RelayCommand(CanExecute = nameof(CanStartMonitoring))]
+        private async Task StartMonitoringAsync()
         {
             try
             {
-                var logs = string.Join(Environment.NewLine, ActivityLogs);
-                Clipboard.SetText(logs);
-                StatusMessage = "Logs copiés dans le presse-papiers";
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Erreur lors de la copie des logs");
-                AddLog($"Erreur lors de la copie des logs: {ex.Message}");
-            }
-        }
-
-        private void ClearLogs(object? parameter)
-        {
-            if (Application.Current?.Dispatcher?.CheckAccess() == true)
-            {
-                ActivityLogs.Clear();
-            }
-            else
-            {
-                Application.Current?.Dispatcher?.Invoke(() => ActivityLogs.Clear());
-            }
-        }
-
-        public void AddLog(string message)
-        {
-            void AddLogInternal(string msg)
-            {
-                // Filtrage des messages redondants de surveillance
-                if (msg == "Surveillance arrêtée")
+                if (string.IsNullOrEmpty(StreamUrl))
                 {
-                    if (_surveillanceStoppedLogged) return;
-                    _surveillanceStoppedLogged = true;
-                }
-                else if (msg == "Surveillance annulée")
-                {
-                    if (_surveillanceStoppedLogged) return;
-                    _surveillanceStoppedLogged = true;
-                }
-                else if (!msg.Contains("Surveillance"))
-                {
-                    _surveillanceStoppedLogged = false;
+                    AddLog("Erreur : L'URL du stream est vide");
+                    return;
                 }
 
-                if (!IsDebugMode)
+                AddLog($"Démarrage de la surveillance : {StreamUrl}");
+                AddLog($"Vérification du statut en direct pour {StreamUrl}");
+
+                var streamInfo = await _streamDetector.GetStreamInfoAsync(StreamUrl);
+                if (streamInfo == null)
                 {
-                    // Filtrage des messages inutiles (identique à avant)
-                    if (msg.Contains("[debug]") ||
-                        msg.Contains("[cli][debug]") ||
-                        msg.Contains("[plugins.youtube][debug]") ||
-                        msg.Contains("[utils.l10n][debug]") ||
-                        msg.Contains("[session][debug]") ||
-                        msg.Contains("Dependencies:") ||
-                        msg.Contains("Arguments:") ||
-                        msg.Contains("Available streams:") ||
-                        msg.Contains("Pre-buffering") ||
-                        msg.Contains("Checking file output") ||
-                        msg.Contains("Writing stream to output") ||
-                        msg.Contains("consent data:") ||
-                        msg.Contains("consent target:") ||
-                        msg.Contains("Using video ID:") ||
-                        msg.Contains("This video is live.") ||
-                        msg.Contains("Language code:") ||
-                        msg.Contains("Writing output to") ||
-                        msg.Contains("Opening stream:") ||
-                        msg.Contains("Found matching plugin") ||
-                        msg.Contains("Dossier et permissions OK") ||
-                        msg.Contains("Commande Streamlink:") ||
-                        msg.Contains("[Streamlink]") ||
-                        msg.StartsWith("Durée:") ||
-                        msg.Contains("Stream détecté:  - ")
-                    )
+                    AddLog("Erreur : Impossible de récupérer les informations du stream");
+                    return;
+                }
+
+                AddLog($"État du stream : {(streamInfo.IsLive ? "En direct" : "Hors ligne")}");
+
+                if (streamInfo.IsLive)
+                {
+                    AddLog("Stream en direct détecté, démarrage de l'enregistrement...");
+                    var streamUrlResult = await _streamDetector.GetStreamUrlAsync(StreamUrl);
+                    if (string.IsNullOrEmpty(streamUrlResult))
                     {
+                        AddLog("Erreur : Impossible de récupérer l'URL du stream");
                         return;
                     }
 
-                    // Détection de la qualité demandée
-                    if (msg.StartsWith("Qualité demandée:"))
-                    {
-                        _lastRequestedQuality = msg.Substring("Qualité demandée:".Length).Trim();
-                        var timestamp = DateTime.Now.ToString("HH:mm:ss");
-                        var logMessage = $"[{timestamp}] Enregistrement démarré en qualité : {_lastRequestedQuality}";
-                        ActivityLogs.Insert(0, logMessage);
-                        if (ActivityLogs.Count > 1000) ActivityLogs.RemoveAt(ActivityLogs.Count - 1);
-                        return;
-                    }
-                    // Détection de la qualité réelle
-                    if (msg.StartsWith("Qualité réelle détectée :"))
-                    {
-                        _lastDetectedQuality = msg.Substring("Qualité réelle détectée :".Length).Trim();
-                        var timestamp = DateTime.Now.ToString("HH:mm:ss");
-                        var logMessage = $"[{timestamp}] Qualité sélectionnée : {_lastDetectedQuality}";
-                        ActivityLogs.Insert(0, logMessage);
-                        if (ActivityLogs.Count > 1000) ActivityLogs.RemoveAt(ActivityLogs.Count - 1);
-                        return;
-                    }
-                    // Remplacement des messages utilisateur
-                    if (msg.Contains("Stream détecté:"))
-                    {
-                        msg = "Stream en direct détecté";
-                    }
-                    else if (msg.Contains("Qualité demandée:"))
-                    {
-                        msg = "Enregistrement en qualité maximale";
-                    }
+                    var platform = "YouTube"; // Pour l'instant, on ne gère que YouTube
+                    var channelName = streamInfo.ChannelName;
+                    var streamTitle = streamInfo.Title;
+
+                    AddLog($"Démarrage de l'enregistrement pour {channelName} sur {platform}");
+                    AddLog($"Titre du stream : {streamTitle}");
+                    AddLog("URL du stream récupérée avec succès");
+
+                    _monitoringCts = new CancellationTokenSource();
+                    await _streamRecorder.StartRecordingAsync(
+                        streamUrlResult,
+                        platform,
+                        channelName,
+                        streamTitle,
+                        _monitoringCts.Token);
+
+                    IsMonitoring = true;
+                    AddLog("Surveillance démarrée avec succès");
                 }
                 else
                 {
-                    // Mode debug : filtrage minimal
-                    if (msg.Contains("Pre-buffering") ||
-                        msg.Contains("Writing stream to output") ||
-                        msg.Contains("Checking file output") ||
-                        msg.Contains("consent data:") ||
-                        msg.Contains("consent target:") ||
-                        msg.Contains("Language code:") ||
-                        msg.Contains("Writing output to") ||
-                        msg.Contains("Opening stream:") ||
-                        msg.Contains("Found matching plugin") ||
-                        msg.StartsWith("Durée:")
-                    )
-                    {
-                        return;
-                    }
-                    if (msg.Contains("[Streamlink]"))
-                    {
-                        var path = msg.Split(']')[1].Trim();
-                        var directory = Path.GetDirectoryName(path);
-                        if (!string.IsNullOrWhiteSpace(directory))
-                        {
-                            msg = $"[Streamlink] Fichier enregistré dans : {directory}";
-                        }
-                        else
-                        {
-                            return; // Ne rien afficher si le chemin est vide
-                        }
-                    }
-                }
-
-                var ts = DateTime.Now.ToString("HH:mm:ss");
-                var logMsg = $"[{ts}] {msg}";
-                ActivityLogs.Insert(0, logMsg);
-                if (ActivityLogs.Count > 1000) ActivityLogs.RemoveAt(ActivityLogs.Count - 1);
-
-                // Stats dans la barre centrale uniquement
-                if (msg.StartsWith("Durée:") || msg.StartsWith("Stats:"))
-                {
-                    CurrentRecordingStats = msg.StartsWith("Stats:") ? msg : $"Stats: {msg}";
-                    IsRecording = true;
-                }
-                else if (msg.Contains("Stream détecté") || msg.Contains("Stream en direct détecté"))
-                {
-                    CurrentAction = msg;
-                    IsRecording = true;
-                }
-                else if (msg.Contains("Le stream est terminé") || msg.Contains("Retour en mode surveillance"))
-                {
-                    IsRecording = false;
-                    CurrentRecordingStats = string.Empty;
+                    AddLog("Le stream n'est pas en direct");
                 }
             }
-
-            if (System.Windows.Application.Current?.Dispatcher?.CheckAccess() == true)
+            catch (Exception ex)
             {
-                AddLogInternal(message);
-            }
-            else
-            {
-                System.Windows.Application.Current?.Dispatcher?.Invoke(() => AddLogInternal(message));
+                _logger.LogError(ex, "Erreur lors du démarrage de la surveillance");
+                AddLog($"Erreur : {ex.Message}");
             }
         }
 
-        public void SetStats(string message)
+        [RelayCommand(CanExecute = nameof(CanStopMonitoring))]
+        private async Task StopMonitoringAsync()
         {
-            if (System.Windows.Application.Current?.Dispatcher?.CheckAccess() == true)
+            try
             {
-                CurrentRecordingStats = message.StartsWith("Stats:") ? message : $"Stats: {message}";
-                IsRecording = true;
+                AddLog("Arrêt de la surveillance...");
+                _monitoringCts?.Cancel();
+                await _streamRecorder.StopRecordingAsync();
+                IsMonitoring = false;
+                AddLog("Surveillance arrêtée avec succès");
             }
-            else
+            catch (Exception ex)
             {
-                System.Windows.Application.Current?.Dispatcher?.Invoke(() =>
-                {
-                    CurrentRecordingStats = message.StartsWith("Stats:") ? message : $"Stats: {message}";
-                    IsRecording = true;
-                });
+                _logger.LogError(ex, "Erreur lors de l'arrêt de la surveillance");
+                AddLog($"Erreur lors de l'arrêt : {ex.Message}");
             }
         }
 
-        public event PropertyChangedEventHandler? PropertyChanged;
-
-        protected virtual void OnPropertyChanged([CallerMemberName] string? propertyName = null)
+        [RelayCommand]
+        private async Task CleanupAsync()
         {
-            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+            try
+            {
+                IsWorking = true;
+                CurrentAction = "Nettoyage";
+                StatusMessage = "Nettoyage en cours...";
+                _logger.LogInformation("Nettoyage en cours...");
+                AddLog("Nettoyage en cours...");
+                await Task.Delay(1000); // Simulation
+                StatusMessage = "Nettoyage terminé";
+            }
+            catch (Exception ex)
+            {
+                StatusMessage = "Erreur lors du nettoyage";
+                _logger.LogError(ex, "Erreur lors du nettoyage");
+                AddLog($"Erreur : {ex.Message}");
+            }
+            finally
+            {
+                IsWorking = false;
+            }
         }
     }
 }

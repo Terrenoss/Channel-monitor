@@ -1,77 +1,64 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using Microsoft.Extensions.Logging;
 
-namespace AutoStreamRec.Services
+namespace Strivea.Services
 {
-    public class ExecutableLocator
+    public class ExecutableLocator : IExecutableLocator
     {
-        private readonly Action<string> _log;
+        private readonly ILogger<ExecutableLocator> _logger;
 
-        public ExecutableLocator(Action<string> logAction)
+        public ExecutableLocator(ILogger<ExecutableLocator> logger)
         {
-            _log = logAction;
+            _logger = logger;
         }
 
-        public string FindExecutablePath(string executable)
+        public string FindExecutable(string executableName)
         {
             try
             {
-                string envPath = Environment.GetEnvironmentVariable("PATH");
-                if (!string.IsNullOrEmpty(envPath))
+                // Vérifier d'abord dans le répertoire courant
+                var currentDir = AppDomain.CurrentDomain.BaseDirectory;
+                var localPath = Path.Combine(currentDir, executableName);
+                if (File.Exists(localPath))
                 {
-                    foreach (var path in envPath.Split(Path.PathSeparator))
-                    {
-                        var fullPath = Path.Combine(path, executable + ".exe");
-                        if (File.Exists(fullPath))
-                            return fullPath;
-                    }
+                    return localPath;
                 }
 
-                var commonPaths = new[]
+                // Vérifier dans le PATH
+                var process = new Process
                 {
-                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Streamlink", "bin"),
-                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "Streamlink", "bin"),
-                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "Python", "Python311", "Scripts"),
-                    Path.Combine("C:", "ffmpeg", "bin"),
-                    AppContext.BaseDirectory
+                    StartInfo = new ProcessStartInfo
+                    {
+                        FileName = "where",
+                        Arguments = executableName,
+                        UseShellExecute = false,
+                        RedirectStandardOutput = true,
+                        CreateNoWindow = true
+                    }
                 };
 
-                foreach (var path in commonPaths)
+                process.Start();
+                var output = process.StandardOutput.ReadToEnd();
+                process.WaitForExit();
+
+                if (!string.IsNullOrEmpty(output))
                 {
-                    var fullPath = Path.Combine(path, executable + ".exe");
-                    if (File.Exists(fullPath))
-                        return fullPath;
+                    return output.Split(new[] { Environment.NewLine }, StringSplitOptions.RemoveEmptyEntries)[0];
                 }
 
-                try
-                {
-                    var proc = new Process()
-                    {
-                        StartInfo = new ProcessStartInfo
-                        {
-                            FileName = executable,
-                            Arguments = "--version",
-                            UseShellExecute = false,
-                            RedirectStandardOutput = true,
-                            RedirectStandardError = true,
-                            CreateNoWindow = true
-                        }
-                    };
-                    if (proc.Start())
-                    {
-                        proc.Kill();
-                        return executable;
-                    }
-                }
-                catch { }
+                return null;
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                _log?.Invoke($"Erreur FindExecutablePath: {ex.Message}");
+                return null;
             }
+        }
 
-            return null;
+        public bool IsExecutableInstalled(string executableName)
+        {
+            return !string.IsNullOrEmpty(FindExecutable(executableName));
         }
     }
 }

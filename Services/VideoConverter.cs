@@ -2,86 +2,133 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
+using Strivea.Models;
+using Strivea.Helpers;
 
-namespace AutoStreamRec.Services
+namespace Strivea.Services
 {
     public class VideoConverter
     {
-        private readonly Action<string> _log;
-        private readonly ExecutableLocator _locator;
+        private readonly ExecutableLocator _executableLocator;
+        private readonly ILogger<VideoConverter> _logger;
 
-        public VideoConverter(Action<string> logAction, ExecutableLocator locator)
+        public VideoConverter(ExecutableLocator executableLocator, ILogger<VideoConverter> logger)
         {
-            _log = logAction;
-            _locator = locator;
+            _executableLocator = executableLocator;
+            _logger = logger;
         }
 
-        public async Task<bool> ConvertToMp4(string tsFilePath, string? mp4FilePath = null)
+        public async Task<bool> ConvertVideoAsync(string inputPath, string outputPath)
         {
-            _log($"Début conversion: {tsFilePath}");
-
-            if (!File.Exists(tsFilePath))
-            {
-                _log($"ERREUR: Fichier TS introuvable: {tsFilePath}");
-                return false;
-            }
-
-            string ffmpegPath = _locator.FindExecutablePath("ffmpeg");
-            if (string.IsNullOrEmpty(ffmpegPath))
-            {
-                _log("ERREUR: FFmpeg non trouvé !");
-                return false;
-            }
-
-            mp4FilePath ??= Path.ChangeExtension(tsFilePath, ".mp4");
-            _log($"Fichier MP4 de sortie: {mp4FilePath}");
-
             try
             {
+                var ffmpegPath = _executableLocator.FindExecutable("ffmpeg");
+                if (string.IsNullOrEmpty(ffmpegPath))
+                {
+                    _logger.LogError("FFmpeg non trouvé");
+                    return false;
+                }
+
                 var startInfo = new ProcessStartInfo
                 {
                     FileName = ffmpegPath,
-                    Arguments = $"-y -i \"{tsFilePath}\" -c:v copy -c:a aac -strict experimental \"{mp4FilePath}\"",
+                    Arguments = $"-i \"{inputPath}\" -c:v copy -c:a copy \"{outputPath}\"",
                     UseShellExecute = false,
                     RedirectStandardOutput = true,
                     RedirectStandardError = true,
                     CreateNoWindow = true
                 };
 
-                using var process = Process.Start(startInfo);
-                if (process == null)
-                {
-                    _log("ERREUR: Impossible de démarrer FFmpeg");
-                    return false;
-                }
+                using var process = new Process { StartInfo = startInfo };
+                process.Start();
 
-                process.BeginOutputReadLine();
-                process.BeginErrorReadLine();
-
+                var output = await process.StandardOutput.ReadToEndAsync();
+                var error = await process.StandardError.ReadToEndAsync();
                 await process.WaitForExitAsync();
-                _log($"FFmpeg terminé - Code de sortie: {process.ExitCode}");
 
-                if (process.ExitCode != 0 || !File.Exists(mp4FilePath))
+                if (process.ExitCode != 0)
                 {
-                    _log("ERREUR: Conversion échouée ou fichier non créé.");
+                    _logger.LogError($"Erreur lors de la conversion : {error}");
                     return false;
                 }
 
-                try
-                {
-                    File.Delete(tsFilePath);
-                    _log("Fichier TS supprimé avec succès");
-                }
-                catch (Exception ex)
-                {
-                    _log($"AVERTISSEMENT: Impossible de supprimer le fichier TS: {ex.Message}");
-                }
-
+                _logger.LogInformation($"Conversion réussie : {outputPath}");
                 return true;
             }
             catch (Exception ex)
             {
-                _log($"ERREUR Conversion: {ex.Message}");
+                _logger.LogError(ex, "Erreur lors de la conversion de la vidéo");
+                return false;
+            }
+        }
+
+        public async Task ConvertDirectory(string inputDirectory, string outputDirectory)
+        {
+            try
+            {
+                if (!Directory.Exists(inputDirectory))
+                {
+                    _logger.LogError($"Le répertoire d'entrée n'existe pas : {inputDirectory}");
+                    return;
+                }
+
+                Directory.CreateDirectory(outputDirectory);
+
+                var files = Directory.GetFiles(inputDirectory, "*.ts");
+                foreach (var file in files)
+                {
+                    var fileName = Path.GetFileNameWithoutExtension(file);
+                    var outputPath = Path.Combine(outputDirectory, $"{fileName}.mp4");
+                    await ConvertVideoAsync(file, outputPath);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Erreur lors de la conversion du répertoire : {ex.Message}");
+            }
+        }
+
+        public async Task<bool> ConvertToMp4(string inputPath)
+        {
+            try
+            {
+                var ffmpegPath = _executableLocator.FindExecutable("ffmpeg");
+                if (string.IsNullOrEmpty(ffmpegPath))
+                {
+                    _logger.LogError("FFmpeg non trouvé");
+                    return false;
+                }
+
+                var outputPath = Path.ChangeExtension(inputPath, ".mp4");
+                var startInfo = new ProcessStartInfo
+                {
+                    FileName = ffmpegPath,
+                    Arguments = $"-i \"{inputPath}\" -c:v copy -c:a copy \"{outputPath}\"",
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    CreateNoWindow = true
+                };
+
+                using var process = new Process { StartInfo = startInfo };
+                process.Start();
+
+                var output = await process.StandardOutput.ReadToEndAsync();
+                var error = await process.StandardError.ReadToEndAsync();
+
+                if (!string.IsNullOrEmpty(error))
+                {
+                    _logger.LogError($"Erreur lors de la conversion : {error}");
+                    return false;
+                }
+
+                _logger.LogInformation($"Conversion réussie : {outputPath}");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Erreur lors de la conversion");
                 return false;
             }
         }

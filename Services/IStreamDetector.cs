@@ -1,11 +1,13 @@
 using System.Threading.Tasks;
-using AutoStreamRec.Models;
+using Strivea.Models;
 
-namespace AutoStreamRec.Services
+namespace Strivea.Services
 {
     public interface IStreamDetector
     {
         bool CanHandle(string url);
-        Task<StreamInfo> DetectStream(string url);
+        Task<bool> IsLiveAsync(string url);
+        Task<string> GetStreamUrlAsync(string url);
+        Task<StreamInfo> GetStreamInfoAsync(string url);
     }
 } 
