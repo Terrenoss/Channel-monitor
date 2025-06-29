@@ -20,6 +20,14 @@ class Program
     {
         try
         {
+            Console.OutputEncoding = System.Text.Encoding.UTF8;
+        }
+        catch (IOException)
+        {
+            // Ignore l'erreur si la console n'est pas disponible (ex: Rider, VS, service Windows)
+        }
+        try
+        {
             // Créer le répertoire des logs s'il n'existe pas
             Directory.CreateDirectory("logs");
 

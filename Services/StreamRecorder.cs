@@ -7,12 +7,13 @@ using Microsoft.Extensions.Logging;
 using Strivea.Models;
 using System.Linq;
 using System.Text.RegularExpressions;
+using System.Collections.Generic;
 
 namespace Strivea.Services
 {
     public interface IStreamRecorder
     {
-        Task StartRecordingAsync(string streamUrl, string platform, string channelName, string streamTitle, CancellationToken cancellationToken);
+        Task StartRecordingAsync(string streamUrl, string platform, string channelName, string streamTitle, CancellationToken cancellationToken, string channelFolderName = null);
         Task StopRecordingAsync();
         bool IsRecording { get; }
     }
@@ -30,36 +31,39 @@ namespace Strivea.Services
         private string _platform;
         private string _channelName;
         private string _streamTitle;
+        private string _tempDir;
+        private List<string> _tsParts = new List<string>();
+        private readonly Action<string> _setStatusMessage;
+        private readonly Action<string> _addUiLog;
 
         public StreamRecorder(
             ILogger<StreamRecorder> logger,
             IExecutableLocator executableLocator,
-            RecordingStatsLogger statsLogger)
+            RecordingStatsLogger statsLogger,
+            Action<string> setStatusMessage = null,
+            Action<string> addUiLog = null)
         {
             _logger = logger;
             _executableLocator = executableLocator;
             _statsLogger = statsLogger;
+            _setStatusMessage = setStatusMessage;
+            _addUiLog = addUiLog;
         }
 
         public bool IsRecording => _isRecording;
+        public string ChannelName => _channelName;
 
-        private string SanitizeFileName(string fileName)
+        public string SanitizeFileName(string fileName)
         {
-            if (string.IsNullOrEmpty(fileName))
-                return "untitled";
-
-            // Remplacer les caractères invalides par des underscores
+            // Cette fonction NE supprime PAS les caractères non-ASCII (japonais, etc.).
+            // Elle ne remplace que les caractères interdits par Windows par un underscore.
             var invalidChars = Path.GetInvalidFileNameChars();
             var sanitized = invalidChars.Aggregate(fileName, (current, invalidChar) => current.Replace(invalidChar, '_'));
-
-            // Supprimer les caractères non-ASCII
-            sanitized = Regex.Replace(sanitized, @"[^\x20-\x7E]", "");
-
             // Limiter la longueur
             return sanitized.Length > 100 ? sanitized.Substring(0, 100) : sanitized;
         }
 
-        public async Task StartRecordingAsync(string streamUrl, string platform, string channelName, string streamTitle, CancellationToken cancellationToken)
+        public async Task StartRecordingAsync(string streamUrl, string platform, string channelName, string streamTitle, CancellationToken cancellationToken, string channelFolderName = null)
         {
             try
             {
@@ -68,7 +72,6 @@ namespace Strivea.Services
                     _logger.LogWarning("Un enregistrement est déjà en cours");
                     return;
                 }
-
                 if (string.IsNullOrEmpty(streamUrl))
                     throw new ArgumentNullException(nameof(streamUrl), "L'URL du stream ne peut pas être nulle");
                 if (string.IsNullOrEmpty(platform))
@@ -78,29 +81,27 @@ namespace Strivea.Services
                 if (string.IsNullOrEmpty(streamTitle))
                     throw new ArgumentNullException(nameof(streamTitle), "Le titre du stream ne peut pas être nul");
 
-                _platform = platform;
-                _channelName = SanitizeFileName(channelName);
+                // Utiliser la fonction de sanitization pour tous les noms de dossier/fichier
+                _platform = SanitizeFileName(platform);
+                _channelName = SanitizeFileName(channelFolderName ?? channelName);
                 _streamTitle = SanitizeFileName(streamTitle);
 
-                // Créer le chemin d'enregistrement
-                var baseDir = Path.Combine(
+                // Créer le dossier Temp pour les morceaux .ts
+                _tempDir = Path.Combine(
                     Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
                     "Strivea",
                     "Recordings",
-                    SanitizeFileName(platform),
-                    _channelName);
+                    _platform,
+                    _channelName,
+                    "Temp");
+                if (!Directory.Exists(_tempDir))
+                    Directory.CreateDirectory(_tempDir);
 
-                _logger.LogInformation($"Création du répertoire : {baseDir}");
-
-                // Créer le répertoire s'il n'existe pas
-                if (!Directory.Exists(baseDir))
-                {
-                    Directory.CreateDirectory(baseDir);
-                }
-
-                // Créer le nom du fichier
-                var fileName = $"{_streamTitle}.ts";
-                var outputPath = Path.Combine(baseDir, fileName);
+                // Nom unique pour chaque morceau .ts
+                var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+                var fileName = $"{_streamTitle}_{timestamp}.ts";
+                var outputPath = Path.Combine(_tempDir, fileName);
+                _tsParts.Add(outputPath);
 
                 _logger.LogInformation($"Démarrage de l'enregistrement pour {_channelName} sur {_platform}");
                 _logger.LogInformation($"URL du stream : {streamUrl}");
@@ -132,9 +133,6 @@ namespace Strivea.Services
                 _currentOutputPath = outputPath;
 
                 _logger.LogInformation($"Enregistrement démarré pour {_channelName} sur {_platform}");
-
-                // L'attente du processus sera gérée par l'appelant ou un mécanisme de surveillance séparé
-                // ou lors de l'arrêt explicite par l'utilisateur via StopRecordingAsync.
             }
             catch (Exception ex)
             {
@@ -177,7 +175,7 @@ namespace Strivea.Services
                     _logger.LogInformation($"Taille du fichier : {fileSize / 1024 / 1024} MB");
 
                     // Convertir automatiquement le fichier
-                    await ConvertRecordingAsync(_currentOutputPath);
+                    await ConcatAndConvertTsPartsAsync();
                 }
             }
             catch (Exception ex)
@@ -191,59 +189,158 @@ namespace Strivea.Services
             }
         }
 
-        private async Task ConvertRecordingAsync(string inputPath)
+        private async Task ConcatAndConvertTsPartsAsync()
         {
-            try
+            _setStatusMessage?.Invoke("Concaténation des segments vidéo en cours...");
+            _logger.LogInformation("[CONCAT] Début de la concaténation des segments vidéo...");
+            _addUiLog?.Invoke("Début de la concaténation des segments vidéo...");
+            var tsFiles = Directory.GetFiles(_tempDir, "*.ts")
+                .Where(f => !f.EndsWith("_merged.ts") && !f.EndsWith(".mp4"))
+                .OrderBy(f => new FileInfo(f).CreationTime)
+                .ToList();
+
+            if (tsFiles.Count == 0)
             {
-                _logger.LogInformation($"Début de la conversion pour {_channelName} sur {_platform}");
-                var ffmpegPath = _executableLocator.FindExecutable("ffmpeg");
-                _logger.LogInformation($"Chemin de FFmpeg trouvé : {ffmpegPath}");
-                
-                if (string.IsNullOrEmpty(ffmpegPath))
-                {
-                    _logger.LogError("FFmpeg non trouvé pour la conversion");
-                    return;
-                }
-
-                var outputPath = Path.ChangeExtension(inputPath, ".mp4");
-                _logger.LogInformation($"Chemin de sortie pour la conversion : {outputPath}");
-                
-                var startInfo = new ProcessStartInfo
-                {
-                    FileName = ffmpegPath,
-                    Arguments = $"-i \"{inputPath}\" -c:v copy -c:a copy \"{outputPath}\"",
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    UseShellExecute = false,
-                    CreateNoWindow = true
-                };
-
-                _logger.LogInformation($"Commande FFmpeg : {startInfo.FileName} {startInfo.Arguments}");
-
-                using var process = new Process { StartInfo = startInfo };
-                process.Start();
-                var output = await process.StandardOutput.ReadToEndAsync();
-                var error = await process.StandardError.ReadToEndAsync();
-                await process.WaitForExitAsync();
-
-                if (process.ExitCode == 0)
-                {
-                    _logger.LogInformation($"Conversion réussie pour {_channelName} sur {_platform}");
-                    _logger.LogInformation($"Fichier converti : {outputPath}");
-                    // Supprimer le fichier original
-                    File.Delete(inputPath);
-                    _logger.LogInformation($"Fichier original supprimé : {inputPath}");
-                }
-                else
-                {
-                    _logger.LogError($"Échec de la conversion pour {_channelName} sur {_platform}, code de sortie : {process.ExitCode}");
-                    _logger.LogError($"Sortie standard : {output}");
-                    _logger.LogError($"Erreur : {error}");
-                }
+                _logger.LogWarning($"Aucun fichier .ts trouvé dans {_tempDir} pour la concaténation.");
+                _setStatusMessage?.Invoke("Aucun segment vidéo à concaténer.");
+                _addUiLog?.Invoke("Aucun segment vidéo à concaténer.");
+                return;
             }
-            catch (Exception ex)
+
+            _logger.LogInformation($"[CONCAT] Fichiers .ts à concaténer ({tsFiles.Count}) :");
+            _addUiLog?.Invoke($"Nombre de segments à concaténer : {tsFiles.Count}");
+            foreach (var ts in tsFiles)
             {
-                _logger.LogError(ex, "Erreur lors de la conversion du fichier");
+                _logger.LogInformation($"[CONCAT] - {ts}");
+                _addUiLog?.Invoke($"Segment : {Path.GetFileName(ts)}");
+            }
+
+            var tempConcatDir = Path.Combine(_tempDir, "TempConcat");
+            if (Directory.Exists(tempConcatDir))
+                Directory.Delete(tempConcatDir, true);
+            Directory.CreateDirectory(tempConcatDir);
+
+            var simpleNames = new List<string>();
+            for (int i = 0; i < tsFiles.Count; i++)
+            {
+                var simpleName = $"part{i + 1}.ts";
+                var dest = Path.Combine(tempConcatDir, simpleName);
+                File.Copy(tsFiles[i], dest, true);
+                simpleNames.Add(simpleName);
+            }
+
+            var concatFile = Path.Combine(tempConcatDir, "concat.txt");
+            var concatLines = simpleNames.Select(n => $"file '{n}'");
+            await File.WriteAllLinesAsync(concatFile, concatLines, new System.Text.UTF8Encoding(false));
+
+            var tempMp4 = Path.Combine(tempConcatDir, "output.mp4");
+            var outputMp4 = Path.Combine(_tempDir, $"{_streamTitle}.mp4");
+
+            _setStatusMessage?.Invoke("Conversion en mp4 en cours...");
+            _logger.LogInformation("[CONCAT] Début de la conversion en mp4...");
+            _addUiLog?.Invoke("Début de la conversion en mp4...");
+            var ffmpegConcatReencodeArgs = $"-f concat -safe 0 -i \"{concatFile}\" -c:v libx264 -c:a aac \"{tempMp4}\"";
+            _logger.LogInformation($"Commande FFmpeg concat+reencode : ffmpeg {ffmpegConcatReencodeArgs}");
+            var concatResult = await RunFfmpegAsync(ffmpegConcatReencodeArgs, logError:true);
+            _logger.LogInformation($"FFmpeg concat+reencode result: {concatResult}");
+
+            if (!File.Exists(tempMp4))
+            {
+                _logger.LogError($"La concaténation+réencodage FFmpeg a échoué, fichier {tempMp4} non trouvé. Sortie FFmpeg : {concatResult}");
+                _setStatusMessage?.Invoke("Erreur lors de la conversion en mp4.");
+                _addUiLog?.Invoke("Erreur lors de la conversion en mp4.");
+                return;
+            }
+
+            if (File.Exists(outputMp4))
+                File.Delete(outputMp4);
+            File.Move(tempMp4, outputMp4);
+
+            var channelDir = Directory.GetParent(_tempDir)?.FullName;
+            if (!string.IsNullOrEmpty(channelDir))
+            {
+                var finalMp4 = Path.Combine(channelDir, $"{_streamTitle}.mp4");
+                _logger.LogInformation($"[CONCAT] Déplacement du fichier final vers : {finalMp4}");
+                _addUiLog?.Invoke($"Déplacement du fichier final vers : {Path.GetFileName(finalMp4)}");
+                if (File.Exists(finalMp4))
+                    File.Delete(finalMp4);
+                File.Move(outputMp4, finalMp4);
+                _logger.LogInformation($"[CONCAT] Fichier final déplacé vers : {finalMp4}");
+                _setStatusMessage?.Invoke("Conversion terminée !");
+                _addUiLog?.Invoke("Concaténation et conversion terminées !");
+                _logger.LogInformation("[CONCAT] Concaténation et conversion terminées avec succès.");
+            }
+            else
+            {
+                _logger.LogWarning($"[CONCAT] Impossible de déplacer le .mp4 final, channelDir introuvable : {_tempDir}");
+                _setStatusMessage?.Invoke("Conversion terminée, mais impossible de déplacer le fichier final.");
+                _addUiLog?.Invoke("Conversion terminée, mais impossible de déplacer le fichier final.");
+            }
+
+            Directory.Delete(tempConcatDir, true);
+        }
+
+        private async Task<string> RunFfmpegAsync(string args, bool logError = false)
+        {
+            var ffmpegPath = _executableLocator.FindExecutable("ffmpeg");
+            if (string.IsNullOrEmpty(ffmpegPath))
+            {
+                _logger.LogError("FFmpeg non trouvé");
+                throw new Exception("FFmpeg non trouvé");
+            }
+
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = ffmpegPath,
+                Arguments = args,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+
+            using (var process = new Process { StartInfo = startInfo })
+            {
+                var outputBuilder = new System.Text.StringBuilder();
+                var errorBuilder = new System.Text.StringBuilder();
+
+                process.OutputDataReceived += (s, e) => { if (e.Data != null) outputBuilder.AppendLine(e.Data); };
+                process.ErrorDataReceived += (s, e) => { if (e.Data != null) errorBuilder.AppendLine(e.Data); };
+
+                process.Start();
+                process.BeginOutputReadLine();
+                process.BeginErrorReadLine();
+
+                // Timeout global
+                var exited = await Task.Run(() => process.WaitForExit(30000));
+                if (!exited)
+                {
+                    _logger.LogError("FFmpeg a dépassé le temps limite et va être tué.");
+                    try { process.Kill(); } catch { }
+                    throw new Exception("FFmpeg bloqué (timeout)");
+                }
+
+                // S'assurer que toute la sortie est lue
+                process.WaitForExit(); // Pour vider les buffers
+                process.CancelOutputRead();
+                process.CancelErrorRead();
+
+                var output = outputBuilder.ToString();
+                var error = errorBuilder.ToString();
+
+                if (logError && !string.IsNullOrWhiteSpace(error))
+                {
+                    _logger.LogError($"FFmpeg stderr : {error}");
+                }
+
+                _logger.LogInformation($"FFmpeg terminé avec code {process.ExitCode}");
+                if (process.ExitCode != 0)
+                {
+                    _logger.LogError($"Erreur lors de l'exécution de FFmpeg. Sortie: {error}");
+                    throw new Exception($"Erreur lors de l'exécution de FFmpeg. Sortie: {error}");
+                }
+
+                return output + (string.IsNullOrWhiteSpace(error) ? "" : "\n[stderr]\n" + error);
             }
         }
     }

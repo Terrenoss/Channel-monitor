@@ -55,7 +55,13 @@ public partial class App : Application
             services.AddSingleton<BaseStreamDetector, YouTubeStreamDetector>();
             services.AddSingleton<IStreamRecorder, StreamRecorder>();
             services.AddSingleton<RecordingStatsLogger>();
-            services.AddSingleton<MainViewModel>();
+            services.AddSingleton<MainViewModel>(sp =>
+                new MainViewModel(
+                    sp.GetRequiredService<ILogger<MainViewModel>>(),
+                    sp.GetRequiredService<IStreamDetector>(),
+                    sp
+                )
+            );
 
             Debug.WriteLine("Construction du conteneur DI...");
             File.AppendAllText("startup.log", "Construction du conteneur DI...\n");
