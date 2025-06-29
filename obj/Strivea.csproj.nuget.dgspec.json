@@ -1,25 +1,31 @@
 {
   "format": 1,
   "restore": {
-    "C:\\Users\\terre\\OneDrive\\Documents\\Projet-JEUX\\Strivea\\Strivea\\Strivea.csproj": {}
+    "F:\\1\\Nouveau dossier\\Channel-monitor\\Strivea.csproj": {}
   },
   "projects": {
-    "C:\\Users\\terre\\OneDrive\\Documents\\Projet-JEUX\\Strivea\\Strivea\\Strivea.csproj": {
+    "F:\\1\\Nouveau dossier\\Channel-monitor\\Strivea.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "C:\\Users\\terre\\OneDrive\\Documents\\Projet-JEUX\\Strivea\\Strivea\\Strivea.csproj",
+        "projectUniqueName": "F:\\1\\Nouveau dossier\\Channel-monitor\\Strivea.csproj",
         "projectName": "Strivea",
-        "projectPath": "C:\\Users\\terre\\OneDrive\\Documents\\Projet-JEUX\\Strivea\\Strivea\\Strivea.csproj",
+        "projectPath": "F:\\1\\Nouveau dossier\\Channel-monitor\\Strivea.csproj",
         "packagesPath": "C:\\Users\\terre\\.nuget\\packages\\",
-        "outputPath": "C:\\Users\\terre\\OneDrive\\Documents\\Projet-JEUX\\Strivea\\Strivea\\obj\\",
+        "outputPath": "F:\\1\\Nouveau dossier\\Channel-monitor\\obj\\",
         "projectStyle": "PackageReference",
+        "fallbackFolders": [
+          "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
+        ],
         "configFilePaths": [
-          "C:\\Users\\terre\\AppData\\Roaming\\NuGet\\NuGet.Config"
+          "C:\\Users\\terre\\AppData\\Roaming\\NuGet\\NuGet.Config",
+          "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.FallbackLocation.config",
+          "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
         ],
         "originalTargetFrameworks": [
           "net8.0-windows"
         ],
         "sources": {
+          "C:\\Program Files (x86)\\Microsoft SDKs\\NuGetPackages\\": {},
           "https://api.nuget.org/v3/index.json": {}
         },
         "frameworks": {
@@ -46,31 +52,35 @@
           "dependencies": {
             "Avalonia": {
               "target": "Package",
-              "version": "[11.0.5, )"
+              "version": "[11.3.2, )"
             },
             "Avalonia.Desktop": {
               "target": "Package",
-              "version": "[11.0.5, )"
+              "version": "[11.3.2, )"
             },
             "Avalonia.Diagnostics": {
               "target": "Package",
-              "version": "[11.0.5, )"
+              "version": "[11.3.2, )"
             },
             "Avalonia.Fonts.Inter": {
               "target": "Package",
-              "version": "[11.0.5, )"
+              "version": "[11.3.2, )"
             },
             "Avalonia.ReactiveUI": {
               "target": "Package",
-              "version": "[11.0.5, )"
+              "version": "[11.3.2, )"
             },
             "Avalonia.Themes.Fluent": {
               "target": "Package",
-              "version": "[11.0.5, )"
+              "version": "[11.3.2, )"
             },
             "CommunityToolkit.Mvvm": {
               "target": "Package",
               "version": "[8.2.2, )"
+            },
+            "MessageBox.Avalonia": {
+              "target": "Package",
+              "version": "[3.2.0, )"
             },
             "Microsoft.Extensions.Configuration.FileExtensions": {
               "target": "Package",

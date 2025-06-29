@@ -17,4 +17,5 @@ public class StreamInfo
     public DateTime DetectionTime { get; set; }
     public int ViewerCount { get; set; }
     public string Quality { get; set; }
+    public string ChannelFolderName { get; set; }
 }

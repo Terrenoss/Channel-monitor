@@ -84,13 +84,16 @@ namespace Strivea.Helpers
 
         public string SanitizeFileName(string fileName)
         {
+            // Cette fonction NE supprime PAS les caractères non-ASCII (japonais, etc.).
+            // Elle ne remplace que les caractères interdits par Windows par un underscore.
             var invalidChars = Path.GetInvalidFileNameChars();
             var sanitized = fileName;
             foreach (var c in invalidChars)
             {
                 sanitized = sanitized.Replace(c, '_');
             }
-            return sanitized;
+            // Limiter la longueur
+            return sanitized.Length > 100 ? sanitized.Substring(0, 100) : sanitized;
         }
 
         public async Task EnsureDirectoryWritableAsync(string path)

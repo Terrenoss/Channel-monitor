@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("Strivea")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+3f259f934c222d38f6e72c512e5db27f090d3c02")]
 [assembly: System.Reflection.AssemblyProductAttribute("Strivea")]
 [assembly: System.Reflection.AssemblyTitleAttribute("Strivea")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

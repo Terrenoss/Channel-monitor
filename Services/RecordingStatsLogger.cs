@@ -83,6 +83,11 @@ namespace Strivea.Services
 
         public void Log(DateTime startTime, long bytesRecorded)
         {
+            var logDir = Path.GetDirectoryName(_statsFilePath);
+            if (!Directory.Exists(logDir))
+            {
+                Directory.CreateDirectory(logDir);
+            }
             try
             {
                 var duration = DateTime.Now - startTime;
