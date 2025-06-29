@@ -1,166 +1,112 @@
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\appsettings.json
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\Strivea.exe
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\Strivea.deps.json
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\Strivea.runtimeconfig.json
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\Strivea.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\Strivea.pdb
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\Avalonia.Base.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\Avalonia.Controls.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\Avalonia.DesignerSupport.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\Avalonia.Dialogs.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\Avalonia.Markup.Xaml.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\Avalonia.Markup.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\Avalonia.Metal.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\Avalonia.MicroCom.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\Avalonia.OpenGL.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\Avalonia.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\Avalonia.Controls.ColorPicker.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\Avalonia.Controls.DataGrid.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\Avalonia.Desktop.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\Avalonia.Diagnostics.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\Avalonia.Fonts.Inter.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\Avalonia.FreeDesktop.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\Avalonia.Native.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\Avalonia.ReactiveUI.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\Avalonia.Remote.Protocol.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\Avalonia.Skia.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\Avalonia.Themes.Fluent.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\Avalonia.Themes.Simple.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\Avalonia.Win32.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\Avalonia.X11.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\CommunityToolkit.Mvvm.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\DynamicData.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\HarfBuzzSharp.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\MicroCom.Runtime.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\Microsoft.CodeAnalysis.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\Microsoft.CodeAnalysis.CSharp.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\Microsoft.CodeAnalysis.CSharp.Scripting.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\Microsoft.CodeAnalysis.Scripting.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\Microsoft.Extensions.Configuration.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\Microsoft.Extensions.Configuration.Abstractions.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\Microsoft.Extensions.Configuration.Binder.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\Microsoft.Extensions.Configuration.FileExtensions.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\Microsoft.Extensions.Configuration.Json.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\Microsoft.Extensions.DependencyInjection.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\Microsoft.Extensions.DependencyInjection.Abstractions.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\Microsoft.Extensions.DependencyModel.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\Microsoft.Extensions.FileProviders.Abstractions.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\Microsoft.Extensions.FileProviders.Physical.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\Microsoft.Extensions.FileSystemGlobbing.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\Microsoft.Extensions.Logging.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\Microsoft.Extensions.Logging.Abstractions.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\Microsoft.Extensions.Logging.Configuration.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\Microsoft.Extensions.Logging.Console.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\Microsoft.Extensions.Logging.Debug.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\Microsoft.Extensions.Options.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\Microsoft.Extensions.Options.ConfigurationExtensions.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\Microsoft.Extensions.Primitives.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\Microsoft.Win32.SystemEvents.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\ReactiveUI.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\Serilog.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\Serilog.Extensions.Logging.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\Serilog.Settings.Configuration.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\Serilog.Sinks.Console.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\Serilog.Sinks.File.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\SkiaSharp.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\Splat.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\System.Diagnostics.DiagnosticSource.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\System.Drawing.Common.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\System.IO.Pipelines.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\System.Reactive.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\System.Text.Encodings.Web.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\System.Text.Json.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\Tmds.DBus.Protocol.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\cs\Microsoft.CodeAnalysis.resources.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\de\Microsoft.CodeAnalysis.resources.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\es\Microsoft.CodeAnalysis.resources.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\fr\Microsoft.CodeAnalysis.resources.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\it\Microsoft.CodeAnalysis.resources.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\ja\Microsoft.CodeAnalysis.resources.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\ko\Microsoft.CodeAnalysis.resources.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\pl\Microsoft.CodeAnalysis.resources.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\pt-BR\Microsoft.CodeAnalysis.resources.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\ru\Microsoft.CodeAnalysis.resources.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\tr\Microsoft.CodeAnalysis.resources.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\zh-Hans\Microsoft.CodeAnalysis.resources.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\zh-Hant\Microsoft.CodeAnalysis.resources.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\cs\Microsoft.CodeAnalysis.CSharp.resources.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\de\Microsoft.CodeAnalysis.CSharp.resources.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\es\Microsoft.CodeAnalysis.CSharp.resources.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\fr\Microsoft.CodeAnalysis.CSharp.resources.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\it\Microsoft.CodeAnalysis.CSharp.resources.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\ja\Microsoft.CodeAnalysis.CSharp.resources.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\ko\Microsoft.CodeAnalysis.CSharp.resources.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\pl\Microsoft.CodeAnalysis.CSharp.resources.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\pt-BR\Microsoft.CodeAnalysis.CSharp.resources.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\ru\Microsoft.CodeAnalysis.CSharp.resources.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\tr\Microsoft.CodeAnalysis.CSharp.resources.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\zh-Hans\Microsoft.CodeAnalysis.CSharp.resources.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\zh-Hant\Microsoft.CodeAnalysis.CSharp.resources.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\cs\Microsoft.CodeAnalysis.CSharp.Scripting.resources.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\de\Microsoft.CodeAnalysis.CSharp.Scripting.resources.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\es\Microsoft.CodeAnalysis.CSharp.Scripting.resources.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\fr\Microsoft.CodeAnalysis.CSharp.Scripting.resources.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\it\Microsoft.CodeAnalysis.CSharp.Scripting.resources.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\ja\Microsoft.CodeAnalysis.CSharp.Scripting.resources.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\ko\Microsoft.CodeAnalysis.CSharp.Scripting.resources.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\pl\Microsoft.CodeAnalysis.CSharp.Scripting.resources.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\pt-BR\Microsoft.CodeAnalysis.CSharp.Scripting.resources.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\ru\Microsoft.CodeAnalysis.CSharp.Scripting.resources.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\tr\Microsoft.CodeAnalysis.CSharp.Scripting.resources.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\zh-Hans\Microsoft.CodeAnalysis.CSharp.Scripting.resources.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\zh-Hant\Microsoft.CodeAnalysis.CSharp.Scripting.resources.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\cs\Microsoft.CodeAnalysis.Scripting.resources.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\de\Microsoft.CodeAnalysis.Scripting.resources.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\es\Microsoft.CodeAnalysis.Scripting.resources.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\fr\Microsoft.CodeAnalysis.Scripting.resources.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\it\Microsoft.CodeAnalysis.Scripting.resources.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\ja\Microsoft.CodeAnalysis.Scripting.resources.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\ko\Microsoft.CodeAnalysis.Scripting.resources.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\pl\Microsoft.CodeAnalysis.Scripting.resources.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\pt-BR\Microsoft.CodeAnalysis.Scripting.resources.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\ru\Microsoft.CodeAnalysis.Scripting.resources.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\tr\Microsoft.CodeAnalysis.Scripting.resources.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\zh-Hans\Microsoft.CodeAnalysis.Scripting.resources.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\zh-Hant\Microsoft.CodeAnalysis.Scripting.resources.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\runtimes\win-arm64\native\av_libglesv2.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\runtimes\win-x64\native\av_libglesv2.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\runtimes\win-x86\native\av_libglesv2.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\runtimes\osx\native\libAvaloniaNative.dylib
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\runtimes\linux-arm\native\libHarfBuzzSharp.so
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\runtimes\linux-arm64\native\libHarfBuzzSharp.so
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\runtimes\linux-musl-x64\native\libHarfBuzzSharp.so
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\runtimes\linux-x64\native\libHarfBuzzSharp.so
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\runtimes\osx\native\libHarfBuzzSharp.dylib
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\runtimes\win-arm64\native\libHarfBuzzSharp.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\runtimes\win-x64\native\libHarfBuzzSharp.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\runtimes\win-x86\native\libHarfBuzzSharp.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\runtimes\win\lib\net6.0\Microsoft.Win32.SystemEvents.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\runtimes\linux-arm\native\libSkiaSharp.so
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\runtimes\linux-arm64\native\libSkiaSharp.so
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\runtimes\linux-musl-x64\native\libSkiaSharp.so
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\runtimes\linux-x64\native\libSkiaSharp.so
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\runtimes\osx\native\libSkiaSharp.dylib
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\runtimes\win-arm64\native\libSkiaSharp.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\runtimes\win-x64\native\libSkiaSharp.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\runtimes\win-x86\native\libSkiaSharp.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\runtimes\unix\lib\net6.0\System.Drawing.Common.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\runtimes\win\lib\net6.0\System.Drawing.Common.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\runtimes\browser\lib\net8.0\System.Text.Encodings.Web.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\obj\Debug\net8.0-windows\Strivea.csproj.AssemblyReference.cache
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\obj\Debug\net8.0-windows\Avalonia\Resources.Inputs.cache
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\obj\Debug\net8.0-windows\Avalonia\resources
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\obj\Debug\net8.0-windows\Strivea.GeneratedMSBuildEditorConfig.editorconfig
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\obj\Debug\net8.0-windows\Strivea.AssemblyInfoInputs.cache
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\obj\Debug\net8.0-windows\Strivea.AssemblyInfo.cs
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\obj\Debug\net8.0-windows\Strivea.csproj.CoreCompileInputs.cache
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\obj\Debug\net8.0-windows\Avalonia\references
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\obj\Debug\net8.0-windows\Avalonia\original.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\obj\Debug\net8.0-windows\Avalonia\original.pdb
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\obj\Debug\net8.0-windows\Avalonia\original.ref.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\obj\Debug\net8.0-windows\refint\Strivea.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\obj\Debug\net8.0-windows\Strivea.dll
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\obj\Debug\net8.0-windows\Strivea.pdb
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\obj\Debug\net8.0-windows\Strivea.csproj.Up2Date
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\obj\Debug\net8.0-windows\Strivea.genruntimeconfig.cache
-C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\obj\Debug\net8.0-windows\ref\Strivea.dll
+F:\1\Nouveau dossier\Channel-monitor\obj\Debug\net8.0-windows\Strivea.csproj.AssemblyReference.cache
+F:\1\Nouveau dossier\Channel-monitor\obj\Debug\net8.0-windows\Avalonia\Resources.Inputs.cache
+F:\1\Nouveau dossier\Channel-monitor\obj\Debug\net8.0-windows\Avalonia\resources
+F:\1\Nouveau dossier\Channel-monitor\obj\Debug\net8.0-windows\Strivea.GeneratedMSBuildEditorConfig.editorconfig
+F:\1\Nouveau dossier\Channel-monitor\obj\Debug\net8.0-windows\Strivea.AssemblyInfoInputs.cache
+F:\1\Nouveau dossier\Channel-monitor\obj\Debug\net8.0-windows\Strivea.AssemblyInfo.cs
+F:\1\Nouveau dossier\Channel-monitor\obj\Debug\net8.0-windows\Strivea.csproj.CoreCompileInputs.cache
+F:\1\Nouveau dossier\Channel-monitor\obj\Debug\net8.0-windows\Strivea.sourcelink.json
+F:\1\Nouveau dossier\Channel-monitor\bin\Debug\net8.0-windows\appsettings.json
+F:\1\Nouveau dossier\Channel-monitor\bin\Debug\net8.0-windows\Strivea.exe
+F:\1\Nouveau dossier\Channel-monitor\bin\Debug\net8.0-windows\Strivea.deps.json
+F:\1\Nouveau dossier\Channel-monitor\bin\Debug\net8.0-windows\Strivea.runtimeconfig.json
+F:\1\Nouveau dossier\Channel-monitor\bin\Debug\net8.0-windows\Strivea.dll
+F:\1\Nouveau dossier\Channel-monitor\bin\Debug\net8.0-windows\Strivea.pdb
+F:\1\Nouveau dossier\Channel-monitor\bin\Debug\net8.0-windows\Avalonia.Base.dll
+F:\1\Nouveau dossier\Channel-monitor\bin\Debug\net8.0-windows\Avalonia.Controls.dll
+F:\1\Nouveau dossier\Channel-monitor\bin\Debug\net8.0-windows\Avalonia.DesignerSupport.dll
+F:\1\Nouveau dossier\Channel-monitor\bin\Debug\net8.0-windows\Avalonia.Dialogs.dll
+F:\1\Nouveau dossier\Channel-monitor\bin\Debug\net8.0-windows\Avalonia.Markup.Xaml.dll
+F:\1\Nouveau dossier\Channel-monitor\bin\Debug\net8.0-windows\Avalonia.Markup.dll
+F:\1\Nouveau dossier\Channel-monitor\bin\Debug\net8.0-windows\Avalonia.Metal.dll
+F:\1\Nouveau dossier\Channel-monitor\bin\Debug\net8.0-windows\Avalonia.MicroCom.dll
+F:\1\Nouveau dossier\Channel-monitor\bin\Debug\net8.0-windows\Avalonia.OpenGL.dll
+F:\1\Nouveau dossier\Channel-monitor\bin\Debug\net8.0-windows\Avalonia.Vulkan.dll
+F:\1\Nouveau dossier\Channel-monitor\bin\Debug\net8.0-windows\Avalonia.dll
+F:\1\Nouveau dossier\Channel-monitor\bin\Debug\net8.0-windows\Avalonia.Controls.ColorPicker.dll
+F:\1\Nouveau dossier\Channel-monitor\bin\Debug\net8.0-windows\Avalonia.Desktop.dll
+F:\1\Nouveau dossier\Channel-monitor\bin\Debug\net8.0-windows\Avalonia.Diagnostics.dll
+F:\1\Nouveau dossier\Channel-monitor\bin\Debug\net8.0-windows\Avalonia.Fonts.Inter.dll
+F:\1\Nouveau dossier\Channel-monitor\bin\Debug\net8.0-windows\Avalonia.FreeDesktop.dll
+F:\1\Nouveau dossier\Channel-monitor\bin\Debug\net8.0-windows\Avalonia.Native.dll
+F:\1\Nouveau dossier\Channel-monitor\bin\Debug\net8.0-windows\Avalonia.ReactiveUI.dll
+F:\1\Nouveau dossier\Channel-monitor\bin\Debug\net8.0-windows\Avalonia.Remote.Protocol.dll
+F:\1\Nouveau dossier\Channel-monitor\bin\Debug\net8.0-windows\Avalonia.Skia.dll
+F:\1\Nouveau dossier\Channel-monitor\bin\Debug\net8.0-windows\Avalonia.Themes.Fluent.dll
+F:\1\Nouveau dossier\Channel-monitor\bin\Debug\net8.0-windows\Avalonia.Themes.Simple.dll
+F:\1\Nouveau dossier\Channel-monitor\bin\Debug\net8.0-windows\Avalonia.Win32.Automation.dll
+F:\1\Nouveau dossier\Channel-monitor\bin\Debug\net8.0-windows\Avalonia.Win32.dll
+F:\1\Nouveau dossier\Channel-monitor\bin\Debug\net8.0-windows\Avalonia.X11.dll
+F:\1\Nouveau dossier\Channel-monitor\bin\Debug\net8.0-windows\CommunityToolkit.Mvvm.dll
+F:\1\Nouveau dossier\Channel-monitor\bin\Debug\net8.0-windows\DialogHost.Avalonia.dll
+F:\1\Nouveau dossier\Channel-monitor\bin\Debug\net8.0-windows\DynamicData.dll
+F:\1\Nouveau dossier\Channel-monitor\bin\Debug\net8.0-windows\HarfBuzzSharp.dll
+F:\1\Nouveau dossier\Channel-monitor\bin\Debug\net8.0-windows\MsBox.Avalonia.dll
+F:\1\Nouveau dossier\Channel-monitor\bin\Debug\net8.0-windows\MicroCom.Runtime.dll
+F:\1\Nouveau dossier\Channel-monitor\bin\Debug\net8.0-windows\Microsoft.Extensions.Configuration.dll
+F:\1\Nouveau dossier\Channel-monitor\bin\Debug\net8.0-windows\Microsoft.Extensions.Configuration.Abstractions.dll
+F:\1\Nouveau dossier\Channel-monitor\bin\Debug\net8.0-windows\Microsoft.Extensions.Configuration.Binder.dll
+F:\1\Nouveau dossier\Channel-monitor\bin\Debug\net8.0-windows\Microsoft.Extensions.Configuration.FileExtensions.dll
+F:\1\Nouveau dossier\Channel-monitor\bin\Debug\net8.0-windows\Microsoft.Extensions.Configuration.Json.dll
+F:\1\Nouveau dossier\Channel-monitor\bin\Debug\net8.0-windows\Microsoft.Extensions.DependencyInjection.dll
+F:\1\Nouveau dossier\Channel-monitor\bin\Debug\net8.0-windows\Microsoft.Extensions.DependencyInjection.Abstractions.dll
+F:\1\Nouveau dossier\Channel-monitor\bin\Debug\net8.0-windows\Microsoft.Extensions.DependencyModel.dll
+F:\1\Nouveau dossier\Channel-monitor\bin\Debug\net8.0-windows\Microsoft.Extensions.FileProviders.Abstractions.dll
+F:\1\Nouveau dossier\Channel-monitor\bin\Debug\net8.0-windows\Microsoft.Extensions.FileProviders.Physical.dll
+F:\1\Nouveau dossier\Channel-monitor\bin\Debug\net8.0-windows\Microsoft.Extensions.FileSystemGlobbing.dll
+F:\1\Nouveau dossier\Channel-monitor\bin\Debug\net8.0-windows\Microsoft.Extensions.Logging.dll
+F:\1\Nouveau dossier\Channel-monitor\bin\Debug\net8.0-windows\Microsoft.Extensions.Logging.Abstractions.dll
+F:\1\Nouveau dossier\Channel-monitor\bin\Debug\net8.0-windows\Microsoft.Extensions.Logging.Configuration.dll
+F:\1\Nouveau dossier\Channel-monitor\bin\Debug\net8.0-windows\Microsoft.Extensions.Logging.Console.dll
+F:\1\Nouveau dossier\Channel-monitor\bin\Debug\net8.0-windows\Microsoft.Extensions.Logging.Debug.dll
+F:\1\Nouveau dossier\Channel-monitor\bin\Debug\net8.0-windows\Microsoft.Extensions.Options.dll
+F:\1\Nouveau dossier\Channel-monitor\bin\Debug\net8.0-windows\Microsoft.Extensions.Options.ConfigurationExtensions.dll
+F:\1\Nouveau dossier\Channel-monitor\bin\Debug\net8.0-windows\Microsoft.Extensions.Primitives.dll
+F:\1\Nouveau dossier\Channel-monitor\bin\Debug\net8.0-windows\ReactiveUI.dll
+F:\1\Nouveau dossier\Channel-monitor\bin\Debug\net8.0-windows\Serilog.dll
+F:\1\Nouveau dossier\Channel-monitor\bin\Debug\net8.0-windows\Serilog.Extensions.Logging.dll
+F:\1\Nouveau dossier\Channel-monitor\bin\Debug\net8.0-windows\Serilog.Settings.Configuration.dll
+F:\1\Nouveau dossier\Channel-monitor\bin\Debug\net8.0-windows\Serilog.Sinks.Console.dll
+F:\1\Nouveau dossier\Channel-monitor\bin\Debug\net8.0-windows\Serilog.Sinks.File.dll
+F:\1\Nouveau dossier\Channel-monitor\bin\Debug\net8.0-windows\SkiaSharp.dll
+F:\1\Nouveau dossier\Channel-monitor\bin\Debug\net8.0-windows\Splat.dll
+F:\1\Nouveau dossier\Channel-monitor\bin\Debug\net8.0-windows\System.Diagnostics.DiagnosticSource.dll
+F:\1\Nouveau dossier\Channel-monitor\bin\Debug\net8.0-windows\System.IO.Pipelines.dll
+F:\1\Nouveau dossier\Channel-monitor\bin\Debug\net8.0-windows\System.Reactive.dll
+F:\1\Nouveau dossier\Channel-monitor\bin\Debug\net8.0-windows\System.Text.Encodings.Web.dll
+F:\1\Nouveau dossier\Channel-monitor\bin\Debug\net8.0-windows\System.Text.Json.dll
+F:\1\Nouveau dossier\Channel-monitor\bin\Debug\net8.0-windows\Tmds.DBus.Protocol.dll
+F:\1\Nouveau dossier\Channel-monitor\bin\Debug\net8.0-windows\runtimes\win-arm64\native\av_libglesv2.dll
+F:\1\Nouveau dossier\Channel-monitor\bin\Debug\net8.0-windows\runtimes\win-x64\native\av_libglesv2.dll
+F:\1\Nouveau dossier\Channel-monitor\bin\Debug\net8.0-windows\runtimes\win-x86\native\av_libglesv2.dll
+F:\1\Nouveau dossier\Channel-monitor\bin\Debug\net8.0-windows\runtimes\osx\native\libAvaloniaNative.dylib
+F:\1\Nouveau dossier\Channel-monitor\bin\Debug\net8.0-windows\runtimes\linux-arm\native\libHarfBuzzSharp.so
+F:\1\Nouveau dossier\Channel-monitor\bin\Debug\net8.0-windows\runtimes\linux-arm64\native\libHarfBuzzSharp.so
+F:\1\Nouveau dossier\Channel-monitor\bin\Debug\net8.0-windows\runtimes\linux-loongarch64\native\libHarfBuzzSharp.so
+F:\1\Nouveau dossier\Channel-monitor\bin\Debug\net8.0-windows\runtimes\linux-musl-arm\native\libHarfBuzzSharp.so
+F:\1\Nouveau dossier\Channel-monitor\bin\Debug\net8.0-windows\runtimes\linux-musl-arm64\native\libHarfBuzzSharp.so
+F:\1\Nouveau dossier\Channel-monitor\bin\Debug\net8.0-windows\runtimes\linux-musl-loongarch64\native\libHarfBuzzSharp.so
+F:\1\Nouveau dossier\Channel-monitor\bin\Debug\net8.0-windows\runtimes\linux-musl-riscv64\native\libHarfBuzzSharp.so
+F:\1\Nouveau dossier\Channel-monitor\bin\Debug\net8.0-windows\runtimes\linux-musl-x64\native\libHarfBuzzSharp.so
+F:\1\Nouveau dossier\Channel-monitor\bin\Debug\net8.0-windows\runtimes\linux-riscv64\native\libHarfBuzzSharp.so
+F:\1\Nouveau dossier\Channel-monitor\bin\Debug\net8.0-windows\runtimes\linux-x64\native\libHarfBuzzSharp.so
+F:\1\Nouveau dossier\Channel-monitor\bin\Debug\net8.0-windows\runtimes\linux-x86\native\libHarfBuzzSharp.so
+F:\1\Nouveau dossier\Channel-monitor\bin\Debug\net8.0-windows\runtimes\osx\native\libHarfBuzzSharp.dylib
+F:\1\Nouveau dossier\Channel-monitor\bin\Debug\net8.0-windows\runtimes\win-arm64\native\libHarfBuzzSharp.dll
+F:\1\Nouveau dossier\Channel-monitor\bin\Debug\net8.0-windows\runtimes\win-x64\native\libHarfBuzzSharp.dll
+F:\1\Nouveau dossier\Channel-monitor\bin\Debug\net8.0-windows\runtimes\win-x86\native\libHarfBuzzSharp.dll
+F:\1\Nouveau dossier\Channel-monitor\bin\Debug\net8.0-windows\runtimes\linux-arm\native\libSkiaSharp.so
+F:\1\Nouveau dossier\Channel-monitor\bin\Debug\net8.0-windows\runtimes\linux-arm64\native\libSkiaSharp.so
+F:\1\Nouveau dossier\Channel-monitor\bin\Debug\net8.0-windows\runtimes\linux-musl-x64\native\libSkiaSharp.so
+F:\1\Nouveau dossier\Channel-monitor\bin\Debug\net8.0-windows\runtimes\linux-x64\native\libSkiaSharp.so
+F:\1\Nouveau dossier\Channel-monitor\bin\Debug\net8.0-windows\runtimes\osx\native\libSkiaSharp.dylib
+F:\1\Nouveau dossier\Channel-monitor\bin\Debug\net8.0-windows\runtimes\win-arm64\native\libSkiaSharp.dll
+F:\1\Nouveau dossier\Channel-monitor\bin\Debug\net8.0-windows\runtimes\win-x64\native\libSkiaSharp.dll
+F:\1\Nouveau dossier\Channel-monitor\bin\Debug\net8.0-windows\runtimes\win-x86\native\libSkiaSharp.dll
+F:\1\Nouveau dossier\Channel-monitor\bin\Debug\net8.0-windows\runtimes\browser\lib\net8.0\System.Text.Encodings.Web.dll
+F:\1\Nouveau dossier\Channel-monitor\obj\Debug\net8.0-windows\Strivea.csproj.Up2Date
+F:\1\Nouveau dossier\Channel-monitor\obj\Debug\net8.0-windows\Strivea.dll
+F:\1\Nouveau dossier\Channel-monitor\obj\Debug\net8.0-windows\refint\Strivea.dll
+F:\1\Nouveau dossier\Channel-monitor\obj\Debug\net8.0-windows\Strivea.pdb
+F:\1\Nouveau dossier\Channel-monitor\obj\Debug\net8.0-windows\Strivea.genruntimeconfig.cache
+F:\1\Nouveau dossier\Channel-monitor\obj\Debug\net8.0-windows\ref\Strivea.dll

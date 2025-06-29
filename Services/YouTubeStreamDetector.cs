@@ -104,48 +104,26 @@ namespace Strivea.Services
 
         private string ExtractChannelId(string url)
         {
-            try
-            {
-                _logger.LogInformation($"Extraction de l'ID de la chaîne depuis l'URL : {url}");
-                
-                if (url.Contains("/channel/"))
+            // /channel/UCxxxxxx
+            var match = Regex.Match(url, @"/channel/([\w-]+)");
+            if (match.Success)
+                return match.Groups[1].Value;
+            // /@handle
+            match = Regex.Match(url, @"/@([\w-]+)");
+            if (match.Success)
                 {
-                    var channelId = url.Split("/channel/")[1].Split('/')[0];
-                    _logger.LogInformation($"ID de chaîne trouvé (format /channel/) : {channelId}");
-                    return channelId;
-                }
-                else if (url.Contains("/@"))
-                {
-                    var handle = url.Split("/@")[1].Split('/')[0];
-                    _logger.LogInformation($"Handle trouvé : @{handle}");
-                    
-                    // Convertir le handle en ID de chaîne via l'API
+                var handle = match.Groups[1].Value;
+                // Utiliser l'API pour convertir le handle en channelId
                     var apiUrl = $"https://www.googleapis.com/youtube/v3/search?part=snippet&q=@{handle}&type=channel&key={YOUTUBE_API_KEY}";
-                    _logger.LogInformation($"Requête API pour obtenir l'ID de chaîne : {apiUrl}");
-                    
                     var response = _httpClient.GetStringAsync(apiUrl).GetAwaiter().GetResult();
                     var jsonDoc = JsonDocument.Parse(response);
-                    
-                    if (jsonDoc.RootElement.GetProperty("items").GetArrayLength() > 0)
+                var items = jsonDoc.RootElement.GetProperty("items");
+                if (items.GetArrayLength() > 0)
                     {
-                        var channelId = jsonDoc.RootElement
-                            .GetProperty("items")[0]
-                            .GetProperty("id")
-                            .GetProperty("channelId")
-                            .GetString();
-                        _logger.LogInformation($"ID de chaîne trouvé pour @{handle} : {channelId}");
-                        return channelId;
-                    }
+                    return items[0].GetProperty("id").GetProperty("channelId").GetString();
                 }
-                
-                _logger.LogWarning("Impossible d'extraire l'ID de la chaîne");
-                return null;
             }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Erreur lors de l'extraction de l'ID de la chaîne");
                 return null;
-            }
         }
 
         private async Task<bool> CheckStreamStatusAsync(string url, string streamlinkPath)
@@ -227,154 +205,174 @@ namespace Strivea.Services
 
         public override async Task<StreamInfo> GetStreamInfoAsync(string url)
         {
+            string channelFolderName = null;
+            string channelHandle = null;
+            string streamId = null;
             try
             {
                 _logger.LogInformation($"Début de la récupération des informations du stream YouTube pour : {url}");
 
-                var streamlinkPath = _executableLocator.FindExecutable("streamlink");
-                if (string.IsNullOrEmpty(streamlinkPath))
+                string videoId = ExtractVideoId(url);
+                string channelId = null;
+                string title = null;
+                string channelName = null;
+                bool isLive = false;
+                bool apiLiveFound = false;
+
+                // Si pas d'ID vidéo, on tente de trouver la vidéo live en cours sur la chaîne
+                if (string.IsNullOrEmpty(videoId))
                 {
-                    _logger.LogError("Streamlink non trouvé");
-                    return new StreamInfo
+                    channelId = ExtractChannelId(url);
+                    if (!string.IsNullOrEmpty(channelId))
                     {
-                        ChannelName = url.Split('/')[^1],
-                        StreamUrl = url,
-                        Title = "Erreur : Streamlink non trouvé",
-                        IsLive = false,
-                        Platform = "YouTube"
-                    };
-                }
-
-                _logger.LogInformation($"Streamlink trouvé à : {streamlinkPath}");
-
-                var startInfo = new ProcessStartInfo
-                {
-                    FileName = streamlinkPath,
-                    Arguments = $"-j {url} best",
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    UseShellExecute = false,
-                    CreateNoWindow = true
-                };
-
-                _logger.LogInformation($"Exécution de streamlink avec les arguments : {startInfo.Arguments}");
-
-                using var process = new Process { StartInfo = startInfo };
-                process.Start();
-                _logger.LogInformation("Processus streamlink démarré");
-
-                var output = await process.StandardOutput.ReadToEndAsync();
-                var error = await process.StandardError.ReadToEndAsync();
-                await process.WaitForExitAsync();
-
-                _logger.LogInformation($"Processus streamlink terminé avec le code : {process.ExitCode}");
-                if (!string.IsNullOrEmpty(output))
-                {
-                    _logger.LogInformation($"Sortie Streamlink (JSON) : {output}");
-                }
-                if (!string.IsNullOrEmpty(error))
-                {
-                    _logger.LogWarning($"Erreur Streamlink : {error}");
-                }
-
-                if (process.ExitCode != 0 || string.IsNullOrEmpty(output))
-                {
-                    _logger.LogError($"Streamlink a échoué ou n'a pas produit de sortie pour {url}. Erreur: {error}");
-                    return new StreamInfo
-                    {
-                        ChannelName = url.Split('/')[^1],
-                        StreamUrl = url,
-                        Title = "Stream YouTube en direct (non détecté)",
-                        IsLive = false,
-                        Platform = "YouTube"
-                    };
-                }
-
-                // Parse the JSON output
-                try
-                {
-                    using JsonDocument doc = JsonDocument.Parse(output);
-                    JsonElement root = doc.RootElement;
-
-                    bool isLive = false;
-                    string title = "Stream YouTube en direct";
-                    string channelName = url.Split('/')[^1]; // Default to last part of URL
-
-                    _logger.LogInformation("Analyse de la réponse JSON de Streamlink...");
-
-                    // Vérifier si c'est un stream HLS et en direct
-                    if (root.TryGetProperty("type", out JsonElement typeElement))
-                    {
-                        var type = typeElement.GetString();
-                        _logger.LogInformation($"Type de stream détecté : {type}");
-                        
-                        if (type == "hls")
+                        var searchApiUrl = $"https://www.googleapis.com/youtube/v3/search?part=snippet&channelId={channelId}&eventType=live&type=video&key={YOUTUBE_API_KEY}";
+                        var searchResponse = await _httpClient.GetStringAsync(searchApiUrl);
+                        _logger.LogInformation($"[API] searchResponse: {searchResponse}");
+                        var searchJson = JsonDocument.Parse(searchResponse);
+                        var searchItems = searchJson.RootElement.GetProperty("items");
+                        if (searchItems.GetArrayLength() > 0)
                         {
-                            if (root.TryGetProperty("url", out JsonElement urlElement))
+                            videoId = searchItems[0].GetProperty("id").GetProperty("videoId").GetString();
+                            apiLiveFound = true;
+                        }
+                    }
+                }
+
+                if (!string.IsNullOrEmpty(videoId))
+                {
+                    streamId = videoId;
+                    var apiUrl = $"https://www.googleapis.com/youtube/v3/videos?part=snippet,liveStreamingDetails&id={videoId}&key={YOUTUBE_API_KEY}";
+                    var response = await _httpClient.GetStringAsync(apiUrl);
+                    _logger.LogInformation($"[API] videoResponse: {response}");
+                    var jsonDoc = JsonDocument.Parse(response);
+                    var items = jsonDoc.RootElement.GetProperty("items");
+                    if (items.GetArrayLength() > 0)
+                    {
+                        var snippet = items[0].GetProperty("snippet");
+                        title = snippet.GetProperty("title").GetString();
+                        channelId = snippet.GetProperty("channelId").GetString();
+                        if (snippet.TryGetProperty("customUrl", out var customUrlProp))
+                        {
+                            channelHandle = "@" + customUrlProp.GetString();
+                        }
+                        isLive = items[0].TryGetProperty("liveStreamingDetails", out var liveDetails) && liveDetails.TryGetProperty("actualStartTime", out _);
+                        apiLiveFound = isLive;
+                    }
+                }
+
+                if (!string.IsNullOrEmpty(channelId))
+                {
+                    var apiUrl = $"https://www.googleapis.com/youtube/v3/channels?part=snippet&id={channelId}&key={YOUTUBE_API_KEY}";
+                    var response = await _httpClient.GetStringAsync(apiUrl);
+                    _logger.LogInformation($"[API] channelResponse: {response}");
+                    var jsonDoc = JsonDocument.Parse(response);
+                    var items = jsonDoc.RootElement.GetProperty("items");
+                    if (items.GetArrayLength() > 0)
+                    {
+                        var snippet = items[0].GetProperty("snippet");
+                        channelName = snippet.GetProperty("title").GetString();
+                        try
+                        {
+                            if (string.IsNullOrEmpty(channelHandle) && snippet.TryGetProperty("customUrl", out var customUrlProp))
                             {
-                                var streamUrl = urlElement.GetString();
-                                _logger.LogInformation($"URL du stream : {streamUrl}");
-                                
-                                // Vérifier si c'est un stream en direct en cherchant plusieurs indicateurs
-                                if (streamUrl.Contains("live=1") || 
-                                    streamUrl.Contains("playlist_type/LIVE") ||
-                                    streamUrl.Contains("yt_live_broadcast"))
-                                {
-                                    isLive = true;
-                                    _logger.LogInformation("Stream détecté comme étant en direct (indicateurs de live trouvés)");
-                                }
-                                else
-                                {
-                                    _logger.LogInformation("Stream non détecté comme étant en direct (aucun indicateur de live trouvé)");
-                                }
+                                channelHandle = "@" + customUrlProp.GetString();
                             }
                         }
+                        catch { /* ignore si customUrl absent */ }
                     }
-
-                    if (root.TryGetProperty("metadata", out JsonElement metadataElement))
-                    {
-                        _logger.LogInformation("Métadonnées trouvées dans la réponse");
-                        
-                        if (metadataElement.TryGetProperty("title", out JsonElement titleElement))
-                        {
-                            title = titleElement.GetString();
-                            _logger.LogInformation($"Titre du stream détecté : {title}");
-                        }
-                        
-                        if (metadataElement.TryGetProperty("author", out JsonElement authorElement))
-                        {
-                            channelName = authorElement.GetString();
-                            _logger.LogInformation($"Nom de la chaîne détecté : {channelName}");
-                        }
-                    }
-                    else
-                    {
-                        _logger.LogInformation("Aucune métadonnée trouvée dans la réponse");
-                    }
-
-                    _logger.LogInformation($"État final de la détection - IsLive: {isLive}, Title: {title}, Channel: {channelName}");
-
-                    return new StreamInfo
-                    {
-                        ChannelName = channelName,
-                        StreamUrl = url,
-                        Title = title,
-                        IsLive = isLive,
-                        Platform = "YouTube"
-                    };
                 }
-                catch (JsonException jsonEx)
+
+                // Détermination du nom de dossier pour la chaîne : toujours le nom joli si possible
+                var handleMatch = Regex.Match(url, @"/@([\w-]+)");
+                if (!string.IsNullOrEmpty(channelName))
                 {
-                    _logger.LogError(jsonEx, $"Erreur lors de l'analyse de la sortie JSON de Streamlink pour {url}. Sortie : {output}");
-                    return new StreamInfo
-                    {
-                        ChannelName = url.Split('/')[^1],
-                        StreamUrl = url,
-                        Title = "Erreur d'analyse JSON",
-                        IsLive = false,
-                        Platform = "YouTube"
-                    };
+                    channelFolderName = channelName;
                 }
+                else if (!string.IsNullOrEmpty(channelHandle))
+                {
+                    channelFolderName = "@" + channelHandle.TrimStart('@');
+                }
+                else if (handleMatch.Success)
+                {
+                    channelFolderName = "@" + handleMatch.Groups[1].Value.TrimStart('@');
+                }
+                else
+                {
+                    channelFolderName = url.Split('/').Last();
+                }
+
+                if (string.IsNullOrEmpty(title))
+                    title = "Stream YouTube en direct";
+                if (string.IsNullOrEmpty(channelName))
+                    channelName = url.Split('/').Last();
+
+                // --- Détection via Streamlink ---
+                var streamlinkPath = _executableLocator.FindExecutable("streamlink");
+                bool streamlinkIsLive = false;
+                string streamUrl = url;
+                if (!string.IsNullOrEmpty(streamlinkPath))
+                {
+                    var startInfo = new ProcessStartInfo
+                    {
+                        FileName = streamlinkPath,
+                        Arguments = $"-j {url} best",
+                        RedirectStandardOutput = true,
+                        RedirectStandardError = true,
+                        UseShellExecute = false,
+                        CreateNoWindow = true
+                    };
+
+                    _logger.LogInformation($"Exécution de streamlink avec les arguments : {startInfo.Arguments}");
+
+                    using var process = new Process { StartInfo = startInfo };
+                    process.Start();
+                    _logger.LogInformation("Processus streamlink démarré");
+
+                    var output = await process.StandardOutput.ReadToEndAsync();
+                    var error = await process.StandardError.ReadToEndAsync();
+                    await process.WaitForExitAsync();
+
+                    _logger.LogInformation($"Processus streamlink terminé avec le code : {process.ExitCode}");
+                    if (!string.IsNullOrEmpty(output))
+                    {
+                        _logger.LogInformation($"Sortie Streamlink (JSON) : {output}");
+                    }
+                    if (!string.IsNullOrEmpty(error))
+                    {
+                        _logger.LogWarning($"Erreur Streamlink : {error}");
+                    }
+
+                    if (process.ExitCode == 0 && !string.IsNullOrEmpty(output))
+                    {
+                        try
+                        {
+                            using JsonDocument doc = JsonDocument.Parse(output);
+                            JsonElement root = doc.RootElement;
+                            if (root.TryGetProperty("url", out var urlElement))
+                            {
+                                streamUrl = urlElement.GetString();
+                                if (streamUrl.Contains("live=1") || streamUrl.Contains("playlist_type/LIVE") || streamUrl.Contains("yt_live_broadcast"))
+                                    streamlinkIsLive = true;
+                            }
+                        }
+                        catch (JsonException) { }
+                    }
+                }
+
+                // On considère le stream comme live si l'un des deux le dit
+                isLive = apiLiveFound || streamlinkIsLive;
+
+                return new StreamInfo
+                {
+                    ChannelName = channelName,
+                    StreamUrl = streamUrl,
+                    Title = title,
+                    StreamTitle = title,
+                    IsLive = isLive,
+                    Platform = "YouTube",
+                    ChannelFolderName = channelFolderName,
+                    StreamId = streamId,
+                };
             }
             catch (Exception ex)
             {
@@ -384,10 +382,24 @@ namespace Strivea.Services
                     ChannelName = url.Split('/')[^1],
                     StreamUrl = url,
                     Title = "Erreur de récupération d'informations",
+                    StreamTitle = "Erreur de récupération d'informations",
                     IsLive = false,
-                    Platform = "YouTube"
+                    Platform = "YouTube",
+                    ChannelFolderName = channelFolderName,
+                    StreamId = streamId
                 };
             }
+        }
+
+        // Méthode utilitaire pour extraire l'ID vidéo d'une URL YouTube
+        private string ExtractVideoId(string url)
+        {
+            // Gère les formats d'URL classiques
+            var regex = new Regex(@"(?:v=|youtu\.be/|/live/|/shorts/|embed/)([\w-]{11})");
+            var match = regex.Match(url);
+            if (match.Success)
+                return match.Groups[1].Value;
+            return null;
         }
     }
 } 

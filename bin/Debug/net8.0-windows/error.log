@@ -1,6 +1,6 @@
-Erreur fatale : System.IO.IOException: The process cannot access the file 'C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\bin\Debug\net8.0-windows\startup.log' because it is being used by another process.
+Erreur fatale : System.IO.IOException: The process cannot access the file 'F:\1\Nouveau dossier\Channel-monitor\bin\Debug\net8.0-windows\startup.log' because it is being used by another process.
    at Microsoft.Win32.SafeHandles.SafeFileHandle.CreateFile(String fullPath, FileMode mode, FileAccess access, FileShare share, FileOptions options)
    at Microsoft.Win32.SafeHandles.SafeFileHandle.Open(String fullPath, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)
    at System.IO.File.OpenHandle(String path, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize)
    at System.IO.File.WriteToFile(String path, FileMode mode, String contents, Encoding encoding)
-   at Strivea.App.OnFrameworkInitializationCompleted() in C:\Users\terre\OneDrive\Documents\Projet-JEUX\Strivea\Strivea\App.axaml.cs:line 61
+   at Strivea.App.OnFrameworkInitializationCompleted() in F:\1\Nouveau dossier\Channel-monitor\App.axaml.cs:line 38

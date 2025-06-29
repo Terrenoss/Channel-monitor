@@ -1,6 +1,7 @@
 ﻿<Application xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Strivea.ViewModels"
+             xmlns:converters="using:Strivea.Converters"
              x:Class="Strivea.App">
     <Application.DataTemplates>
         <vm:ViewLocator />
@@ -17,4 +18,9 @@
             <Setter Property="Margin" Value="5" />
         </Style>
     </Application.Styles>
+    <Application.Resources>
+        <converters:UniversalBoolConverter x:Key="BoolConverter" />
+        <converters:FolderToChannelNameConverter x:Key="FolderToChannelNameConverter" />
+        <converters:FolderToFileCountConverter x:Key="FolderToFileCountConverter" />
+    </Application.Resources>
 </Application>

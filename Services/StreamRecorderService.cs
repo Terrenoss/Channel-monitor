@@ -24,6 +24,7 @@ namespace Strivea.Services
         private long _lastFileSize;
         private string _currentStreamUrl;
         private StreamInfo _currentStreamInfo;
+        private readonly TwitchApiService _twitchApiService;
 
         public StreamRecorderService(
             IExecutableLocator executableLocator,
@@ -31,17 +32,19 @@ namespace Strivea.Services
             ILoggerFactory loggerFactory,
             RecordingStatsLogger statsLogger,
             VideoConverter videoConverter,
-            Action<string> log)
+            Action<string> log,
+            TwitchApiService twitchApiService)
         {
             _executableLocator = executableLocator;
             _logger = logger;
             _statsLogger = statsLogger;
             _videoConverter = videoConverter;
             _log = log;
+            _twitchApiService = twitchApiService;
 
             _detectors = new Dictionary<string, IStreamDetector>
             {
-                { "twitch", new TwitchStreamDetector(_logger, _executableLocator) },
+                { "twitch", new TwitchStreamDetector(_logger, _executableLocator, _twitchApiService) },
                 { "kick", new KickStreamDetector(_logger, _executableLocator) },
                 { "trovo", new TrovoStreamDetector(_logger, _executableLocator) },
                 { "dlive", new DLiveStreamDetector(_logger, _executableLocator) },
