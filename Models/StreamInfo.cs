@@ -18,4 +18,5 @@ public class StreamInfo
     public int ViewerCount { get; set; }
     public string Quality { get; set; }
     public string ChannelFolderName { get; set; }
+    public string StreamId { get; set; }
 }

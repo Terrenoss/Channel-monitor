@@ -223,7 +223,10 @@ namespace Strivea.ViewModels
                         platform,
                         channelName,
                         streamTitle,
-                        _monitoringCts.Token);
+                        _monitoringCts.Token,
+                        streamInfo.ChannelFolderName,
+                        streamInfo.StreamId
+                    );
 
                     AddLog("Surveillance démarrée avec succès");
                 }
@@ -314,14 +317,16 @@ namespace Strivea.ViewModels
                     "Temp");
                 if (Directory.Exists(tempDir))
                 {
-                    var tsFiles = Directory.GetFiles(tempDir, "*.ts");
-                    int count = 0;
-                    foreach (var ts in tsFiles)
-                    {
-                        File.Delete(ts);
-                        count++;
-                    }
-                    AddLog($"{count} fichiers .ts supprimés dans {tempDir}");
+                    // Compter tous les fichiers et dossiers à supprimer
+                    int fileCount = Directory.GetFiles(tempDir, "*", SearchOption.AllDirectories).Length;
+                    int dirCount = Directory.GetDirectories(tempDir, "*", SearchOption.AllDirectories).Length;
+                    int total = fileCount + dirCount;
+
+                    Directory.Delete(tempDir, true);
+                    Directory.CreateDirectory(tempDir);
+
+                    AddLog($"Suppression terminée : {total} éléments supprimés dans Temp.");
+                    RefreshTempFolders();
                 }
                 else
                 {
@@ -347,7 +352,9 @@ namespace Strivea.ViewModels
             var tempDirs = Directory.GetDirectories(recordingsRoot, "Temp", SearchOption.AllDirectories);
             foreach (var dir in tempDirs)
             {
-                if (Directory.GetFiles(dir, "*.ts").Any())
+                // Recherche récursive de tous les .ts dans Temp et ses sous-dossiers
+                var tsFiles = Directory.GetFiles(dir, "*.ts", SearchOption.AllDirectories);
+                if (tsFiles.Any())
                 {
                     TempFoldersWithTs.Add(dir);
                 }
@@ -364,10 +371,11 @@ namespace Strivea.ViewModels
                 AddLog("Dossier Temp introuvable.");
                 return;
             }
-            var channelName = Directory.GetParent(tempDir)?.Parent?.Name ?? tempDir;
+            // Extraire le nom de la chaîne à partir du chemin du dossier Temp
+            var channelName = Directory.GetParent(tempDir)?.Name ?? tempDir;
             var result = await ShowConfirmationDialog(
                 $"Supprimer les fichiers temporaires pour {channelName}",
-                $"Êtes-vous sûr de vouloir supprimer tous les fichiers .ts du dossier Temp de la chaîne '{channelName}' ?\n\nATTENTION : Cette action supprimera tous les segments vidéo temporaires (.ts) pour cette chaîne.\nVous ne pourrez plus générer un seul fichier mp4 à partir de plusieurs sessions.\nAssurez-vous que le live est bien terminé et que vous n'aurez plus besoin de reprendre l'enregistrement.",
+                $"Êtes-vous sûr de vouloir supprimer tous les fichiers du dossier Temp de la chaîne '{channelName}' ?\n\nATTENTION : Cette action supprimera tous les segments vidéo temporaires (.ts) pour cette chaîne.\nVous ne pourrez plus générer un seul fichier mp4 à partir de plusieurs sessions.\nAssurez-vous que le live est bien terminé et que vous n'aurez plus besoin de reprendre l'enregistrement.",
                 parentWindow
             );
             if (!result)
@@ -377,19 +385,20 @@ namespace Strivea.ViewModels
             }
             try
             {
-                var tsFiles = Directory.GetFiles(tempDir, "*.ts");
-                int count = 0;
-                foreach (var ts in tsFiles)
-                {
-                    File.Delete(ts);
-                    count++;
-                }
-                AddLog($"{count} fichiers .ts supprimés dans {tempDir}");
+                // Compter tous les fichiers et dossiers à supprimer
+                int fileCount = Directory.GetFiles(tempDir, "*", SearchOption.AllDirectories).Length;
+                int dirCount = Directory.GetDirectories(tempDir, "*", SearchOption.AllDirectories).Length;
+                int total = fileCount + dirCount;
+
+                Directory.Delete(tempDir, true);
+                Directory.CreateDirectory(tempDir);
+
+                AddLog($"Suppression terminée : {total} éléments supprimés dans Temp.");
                 RefreshTempFolders();
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Erreur lors du nettoyage des fichiers .ts");
+                _logger.LogError(ex, "Erreur lors du nettoyage des fichiers temporaires");
                 AddLog($"Erreur lors du nettoyage : {ex.Message}");
             }
         }
@@ -445,6 +454,19 @@ namespace Strivea.ViewModels
                     OutputDirectory = result;
                 }
             }
+        }
+
+        // Ajout d'une méthode utilitaire pour extraire l'ID du live depuis StreamInfo (YouTube)
+        private string ExtractLiveIdFromStreamInfo(Strivea.Models.StreamInfo info)
+        {
+            // On tente d'extraire l'ID vidéo depuis l'URL du stream (YouTube)
+            if (info == null || string.IsNullOrEmpty(info.StreamUrl))
+                return null;
+            var url = info.StreamUrl;
+            var match = System.Text.RegularExpressions.Regex.Match(url, @"(?:v=|youtu\.be/|/live/|/shorts/|embed/)([\w-]{11})");
+            if (match.Success)
+                return match.Groups[1].Value;
+            return null;
         }
     }
 }
