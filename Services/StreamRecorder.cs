@@ -13,7 +13,7 @@ namespace Strivea.Services
 {
     public interface IStreamRecorder
     {
-        Task StartRecordingAsync(string streamUrl, string platform, string channelName, string streamTitle, CancellationToken cancellationToken, string channelFolderName = null, string liveId = null);
+        Task StartRecordingAsync(string streamUrl, string platform, string channelName, string streamTitle, CancellationToken cancellationToken, string channelFolderName = null);
         Task StopRecordingAsync();
         bool IsRecording { get; }
     }
@@ -35,8 +35,6 @@ namespace Strivea.Services
         private List<string> _tsParts = new List<string>();
         private readonly Action<string> _setStatusMessage;
         private readonly Action<string> _addUiLog;
-        private string _sessionId;
-        private string _sessionTempDir;
 
         public StreamRecorder(
             ILogger<StreamRecorder> logger,
@@ -65,7 +63,7 @@ namespace Strivea.Services
             return sanitized.Length > 100 ? sanitized.Substring(0, 100) : sanitized;
         }
 
-        public async Task StartRecordingAsync(string streamUrl, string platform, string channelName, string streamTitle, CancellationToken cancellationToken, string channelFolderName = null, string liveId = null)
+        public async Task StartRecordingAsync(string streamUrl, string platform, string channelName, string streamTitle, CancellationToken cancellationToken, string channelFolderName = null)
         {
             try
             {
@@ -99,23 +97,10 @@ namespace Strivea.Services
                 if (!Directory.Exists(_tempDir))
                     Directory.CreateDirectory(_tempDir);
 
-                // Générer l'identifiant de session
-                if (!string.IsNullOrEmpty(liveId))
-                {
-                    _sessionId = liveId;
-                }
-                else
-                {
-                    _sessionId = $"{platform}_{channelName}_{DateTime.Now:yyyyMMdd_HHmmss}";
-                }
-                // Créer un dossier temporaire propre à la session
-                _sessionTempDir = Path.Combine(_tempDir, _sessionId);
-                Directory.CreateDirectory(_sessionTempDir);
-
                 // Nom unique pour chaque morceau .ts
                 var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
                 var fileName = $"{_streamTitle}_{timestamp}.ts";
-                var outputPath = Path.Combine(_sessionTempDir, fileName);
+                var outputPath = Path.Combine(_tempDir, fileName);
                 _tsParts.Add(outputPath);
 
                 _logger.LogInformation($"Démarrage de l'enregistrement pour {_channelName} sur {_platform}");
@@ -209,16 +194,14 @@ namespace Strivea.Services
             _setStatusMessage?.Invoke("Concaténation des segments vidéo en cours...");
             _logger.LogInformation("[CONCAT] Début de la concaténation des segments vidéo...");
             _addUiLog?.Invoke("Début de la concaténation des segments vidéo...");
-            // Utiliser le dossier temporaire de la session
-            var tsDir = _sessionTempDir ?? _tempDir;
-            var tsFiles = Directory.GetFiles(tsDir, "*.ts")
+            var tsFiles = Directory.GetFiles(_tempDir, "*.ts")
                 .Where(f => !f.EndsWith("_merged.ts") && !f.EndsWith(".mp4"))
                 .OrderBy(f => new FileInfo(f).CreationTime)
                 .ToList();
 
             if (tsFiles.Count == 0)
             {
-                _logger.LogWarning($"Aucun fichier .ts trouvé dans {tsDir} pour la concaténation.");
+                _logger.LogWarning($"Aucun fichier .ts trouvé dans {_tempDir} pour la concaténation.");
                 _setStatusMessage?.Invoke("Aucun segment vidéo à concaténer.");
                 _addUiLog?.Invoke("Aucun segment vidéo à concaténer.");
                 return;
@@ -232,7 +215,7 @@ namespace Strivea.Services
                 _addUiLog?.Invoke($"Segment : {Path.GetFileName(ts)}");
             }
 
-            var tempConcatDir = Path.Combine(tsDir, "TempConcat");
+            var tempConcatDir = Path.Combine(_tempDir, "TempConcat");
             if (Directory.Exists(tempConcatDir))
                 Directory.Delete(tempConcatDir, true);
             Directory.CreateDirectory(tempConcatDir);
@@ -251,7 +234,7 @@ namespace Strivea.Services
             await File.WriteAllLinesAsync(concatFile, concatLines, new System.Text.UTF8Encoding(false));
 
             var tempMp4 = Path.Combine(tempConcatDir, "output.mp4");
-            var outputMp4 = Path.Combine(tsDir, $"{_streamTitle}.mp4");
+            var outputMp4 = Path.Combine(_tempDir, $"{_streamTitle}.mp4");
 
             _setStatusMessage?.Invoke("Conversion en mp4 en cours...");
             _logger.LogInformation("[CONCAT] Début de la conversion en mp4...");
@@ -273,7 +256,7 @@ namespace Strivea.Services
                 File.Delete(outputMp4);
             File.Move(tempMp4, outputMp4);
 
-            var channelDir = Directory.GetParent(tsDir)?.Parent?.FullName;
+            var channelDir = Directory.GetParent(_tempDir)?.FullName;
             if (!string.IsNullOrEmpty(channelDir))
             {
                 var finalMp4 = Path.Combine(channelDir, $"{_streamTitle}.mp4");
@@ -289,7 +272,7 @@ namespace Strivea.Services
             }
             else
             {
-                _logger.LogWarning($"[CONCAT] Impossible de déplacer le .mp4 final, channelDir introuvable : {tsDir}");
+                _logger.LogWarning($"[CONCAT] Impossible de déplacer le .mp4 final, channelDir introuvable : {_tempDir}");
                 _setStatusMessage?.Invoke("Conversion terminée, mais impossible de déplacer le fichier final.");
                 _addUiLog?.Invoke("Conversion terminée, mais impossible de déplacer le fichier final.");
             }
