@@ -1,0 +1,63 @@
+# Fichiers et dossiers de build .NET
+bin/
+obj/
+**bin/
+**obj/
+**bin/Debug/
+**bin/Release/
+**obj/Debug/
+**obj/Release/
+
+# Fichiers de logs
+*.log
+logs/
+
+# Fichiers temporaires
+*.tmp
+*.temp
+*.bak
+*.swp
+*.swo
+
+# Fichiers de configuration utilisateur
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Dossiers d'IDE
+.vscode/
+.idea/
+*.DotSettings.user
+
+# Fichiers de packages
+*.nupkg
+# Fichiers de cache NuGet
+*.snupkg
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+# Fichiers de test
+TestResults/
+
+# Fichiers de publication
+publish/
+
+# Fichiers de configuration secrets
+secrets.json
+
+# Fichiers système
+Thumbs.db
+Desktop.ini
+
+# Fichiers de sauvegarde d'éditeurs
+*~
+
+# Fichiers spécifiques à Avalonia
+*.axaml.cs~
+*.axaml~
+
+# Fichiers de concaténation temporaire
+*_merged.ts
+Temp/ 
