@@ -10,6 +10,12 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Strivea.Services;
 using System.Threading;
+using Microsoft.Extensions.DependencyInjection;
+using MsBox.Avalonia;
+using MsBox.Avalonia.Enums;
+using System.Collections.Generic;
+using System.Linq;
+using Strivea.Views;
 
 namespace Strivea.ViewModels
 {
@@ -17,7 +23,7 @@ namespace Strivea.ViewModels
     {
         private readonly ILogger<MainViewModel> _logger;
         private readonly IStreamDetector _streamDetector;
-        private readonly IStreamRecorder _streamRecorder;
+        private readonly StreamRecorder _streamRecorder;
         private string _streamUrl;
         private string _outputDirectory;
         private bool _isMonitoring;
@@ -26,23 +32,40 @@ namespace Strivea.ViewModels
         private string _currentAction;
         private string _currentRecordingStats;
         private CancellationTokenSource _monitoringCts;
+        private bool _isTempSectionVisible;
 
         public MainViewModel(
             ILogger<MainViewModel> logger,
             IStreamDetector streamDetector,
-            IStreamRecorder streamRecorder)
+            IServiceProvider serviceProvider)
         {
             _logger = logger;
             _streamDetector = streamDetector;
-            _streamRecorder = streamRecorder;
             ActivityLogs = new ObservableCollection<string>();
             OutputDirectory = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
                 "Strivea",
                 "Recordings");
 
+            // Création manuelle du StreamRecorder avec les bons callbacks UI
+            var loggerStreamRecorder = serviceProvider.GetRequiredService<ILogger<StreamRecorder>>();
+            var executableLocator = serviceProvider.GetRequiredService<IExecutableLocator>();
+            var statsLogger = serviceProvider.GetRequiredService<RecordingStatsLogger>();
+            _streamRecorder = new StreamRecorder(
+                loggerStreamRecorder,
+                executableLocator,
+                statsLogger,
+                status => StatusMessage = status,
+                log => AddLog(log)
+            );
+
             _logger.LogInformation("MainViewModel initialisé");
             AddLog("Application démarrée");
+
+            _logger.LogInformation($"CanStartMonitoring après changement: {CanStartMonitoring}");
+            _logger.LogInformation($"CanStopMonitoring après changement: {CanStopMonitoring}");
+
+            OpenTempFilesManagerCommand = new RelayCommand(OpenTempFilesManager);
         }
 
         public ObservableCollection<string> ActivityLogs { get; }
@@ -108,6 +131,16 @@ namespace Strivea.ViewModels
             get => _currentRecordingStats;
             set => SetProperty(ref _currentRecordingStats, value);
         }
+
+        public ObservableCollection<string> TempFoldersWithTs { get; } = new();
+
+        public bool IsTempSectionVisible
+        {
+            get => _isTempSectionVisible;
+            set => SetProperty(ref _isTempSectionVisible, value);
+        }
+
+        public IRelayCommand OpenTempFilesManagerCommand { get; }
 
         private void AddLog(string message)
         {
@@ -184,14 +217,17 @@ namespace Strivea.ViewModels
                     AddLog("URL du stream récupérée avec succès");
 
                     _monitoringCts = new CancellationTokenSource();
+                    IsMonitoring = true;
                     await _streamRecorder.StartRecordingAsync(
                         streamUrlResult,
                         platform,
                         channelName,
                         streamTitle,
-                        _monitoringCts.Token);
+                        _monitoringCts.Token,
+                        streamInfo.ChannelFolderName,
+                        streamInfo.StreamId
+                    );
 
-                    IsMonitoring = true;
                     AddLog("Surveillance démarrée avec succès");
                 }
                 else
@@ -214,13 +250,22 @@ namespace Strivea.ViewModels
                 AddLog("Arrêt de la surveillance...");
                 _monitoringCts?.Cancel();
                 await _streamRecorder.StopRecordingAsync();
-                IsMonitoring = false;
                 AddLog("Surveillance arrêtée avec succès");
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Erreur lors de l'arrêt de la surveillance");
                 AddLog($"Erreur lors de l'arrêt : {ex.Message}");
+            }
+            finally
+            {
+                Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                {
+                    IsMonitoring = false;
+                    _logger.LogInformation($"[DEBUG] IsMonitoring forcé à {IsMonitoring} dans finally StopMonitoringAsync");
+                    StartMonitoringCommand.NotifyCanExecuteChanged();
+                    StopMonitoringCommand.NotifyCanExecuteChanged();
+                });
             }
         }
 
@@ -247,6 +292,181 @@ namespace Strivea.ViewModels
             {
                 IsWorking = false;
             }
+        }
+
+        [RelayCommand]
+        public async Task CleanTempFiles()
+        {
+            var result = await ShowConfirmationDialog(
+                "Nettoyer les fichiers temporaires",
+                "Êtes-vous sûr de vouloir supprimer tous les fichiers .ts temporaires ?\n\nATTENTION : Cette action supprimera tous les segments vidéo temporaires (.ts) pour cette chaîne. Vous ne pourrez plus générer un seul fichier mp4 à partir de plusieurs sessions. Assurez-vous que le live est bien terminé et que vous n'aurez plus besoin de reprendre l'enregistrement."
+            );
+            if (!result)
+            {
+                AddLog("Nettoyage annulé par l'utilisateur.");
+                return;
+            }
+            try
+            {
+                var tempDir = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+                    "Strivea",
+                    "Recordings",
+                    "YouTube", // À adapter si multi-plateforme
+                    _streamRecorder?.SanitizeFileName(_streamRecorder?.ChannelName ?? ""),
+                    "Temp");
+                if (Directory.Exists(tempDir))
+                {
+                    // Compter tous les fichiers et dossiers à supprimer
+                    int fileCount = Directory.GetFiles(tempDir, "*", SearchOption.AllDirectories).Length;
+                    int dirCount = Directory.GetDirectories(tempDir, "*", SearchOption.AllDirectories).Length;
+                    int total = fileCount + dirCount;
+
+                    Directory.Delete(tempDir, true);
+                    Directory.CreateDirectory(tempDir);
+
+                    AddLog($"Suppression terminée : {total} éléments supprimés dans Temp.");
+                    RefreshTempFolders();
+                }
+                else
+                {
+                    AddLog("Aucun dossier Temp trouvé pour cette chaîne.");
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Erreur lors du nettoyage des fichiers .ts");
+                AddLog($"Erreur lors du nettoyage : {ex.Message}");
+            }
+        }
+
+        [RelayCommand]
+        public void RefreshTempFolders()
+        {
+            TempFoldersWithTs.Clear();
+            var recordingsRoot = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+                "Strivea",
+                "Recordings");
+            if (!Directory.Exists(recordingsRoot)) return;
+            var tempDirs = Directory.GetDirectories(recordingsRoot, "Temp", SearchOption.AllDirectories);
+            foreach (var dir in tempDirs)
+            {
+                // Recherche récursive de tous les .ts dans Temp et ses sous-dossiers
+                var tsFiles = Directory.GetFiles(dir, "*.ts", SearchOption.AllDirectories);
+                if (tsFiles.Any())
+                {
+                    TempFoldersWithTs.Add(dir);
+                }
+            }
+        }
+
+        [RelayCommand]
+        public async Task DeleteTempFilesForFolder((string tempDir, Window parentWindow) param)
+        {
+            var tempDir = param.tempDir;
+            var parentWindow = param.parentWindow;
+            if (string.IsNullOrWhiteSpace(tempDir) || !Directory.Exists(tempDir))
+            {
+                AddLog("Dossier Temp introuvable.");
+                return;
+            }
+            // Extraire le nom de la chaîne à partir du chemin du dossier Temp
+            var channelName = Directory.GetParent(tempDir)?.Name ?? tempDir;
+            var result = await ShowConfirmationDialog(
+                $"Supprimer les fichiers temporaires pour {channelName}",
+                $"Êtes-vous sûr de vouloir supprimer tous les fichiers du dossier Temp de la chaîne '{channelName}' ?\n\nATTENTION : Cette action supprimera tous les segments vidéo temporaires (.ts) pour cette chaîne.\nVous ne pourrez plus générer un seul fichier mp4 à partir de plusieurs sessions.\nAssurez-vous que le live est bien terminé et que vous n'aurez plus besoin de reprendre l'enregistrement.",
+                parentWindow
+            );
+            if (!result)
+            {
+                AddLog("Suppression annulée par l'utilisateur.");
+                return;
+            }
+            try
+            {
+                // Compter tous les fichiers et dossiers à supprimer
+                int fileCount = Directory.GetFiles(tempDir, "*", SearchOption.AllDirectories).Length;
+                int dirCount = Directory.GetDirectories(tempDir, "*", SearchOption.AllDirectories).Length;
+                int total = fileCount + dirCount;
+
+                Directory.Delete(tempDir, true);
+                Directory.CreateDirectory(tempDir);
+
+                AddLog($"Suppression terminée : {total} éléments supprimés dans Temp.");
+                RefreshTempFolders();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Erreur lors du nettoyage des fichiers temporaires");
+                AddLog($"Erreur lors du nettoyage : {ex.Message}");
+            }
+        }
+
+        [RelayCommand]
+        public void ToggleTempSectionVisibility()
+        {
+            IsTempSectionVisible = !IsTempSectionVisible;
+        }
+
+        private async Task<bool> ShowConfirmationDialog(string title, string message, Window? parent = null)
+        {
+            var window = parent ?? (Avalonia.Application.Current?.ApplicationLifetime as Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime)?.MainWindow;
+            if (window == null)
+                return false;
+            var box = MessageBoxManager.GetMessageBoxStandard(title, message, ButtonEnum.YesNo, Icon.Warning);
+            var result = await box.ShowWindowDialogAsync(window);
+            return result == ButtonResult.Yes;
+        }
+
+        private async void OpenTempFilesManager()
+        {
+            RefreshTempFolders();
+            var window = new TempFilesManagerWindow();
+            window.DataContext = this;
+            if (App.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop)
+            {
+                var mainWindow = desktop.MainWindow;
+                await window.ShowDialog(mainWindow);
+            }
+            else
+            {
+                await window.ShowDialog(null);
+            }
+        }
+
+        [RelayCommand]
+        private async Task BrowseOutputDirectoryAsync()
+        {
+            var dialog = new OpenFolderDialog
+            {
+                Title = "Sélectionner le dossier de destination"
+            };
+            // On tente de trouver la fenêtre principale Avalonia
+            var topLevel = Avalonia.Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop
+                ? desktop.MainWindow
+                : null;
+            if (topLevel != null)
+            {
+                var result = await dialog.ShowAsync(topLevel);
+                if (!string.IsNullOrWhiteSpace(result))
+                {
+                    OutputDirectory = result;
+                }
+            }
+        }
+
+        // Ajout d'une méthode utilitaire pour extraire l'ID du live depuis StreamInfo (YouTube)
+        private string ExtractLiveIdFromStreamInfo(Strivea.Models.StreamInfo info)
+        {
+            // On tente d'extraire l'ID vidéo depuis l'URL du stream (YouTube)
+            if (info == null || string.IsNullOrEmpty(info.StreamUrl))
+                return null;
+            var url = info.StreamUrl;
+            var match = System.Text.RegularExpressions.Regex.Match(url, @"(?:v=|youtu\.be/|/live/|/shorts/|embed/)([\w-]{11})");
+            if (match.Success)
+                return match.Groups[1].Value;
+            return null;
         }
     }
 }

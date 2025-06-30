@@ -8,9 +8,12 @@ namespace Strivea.Services
 {
     public class TwitchStreamDetector : BaseStreamDetector
     {
-        public TwitchStreamDetector(ILogger logger, IExecutableLocator executableLocator)
+        private readonly TwitchApiService _twitchApiService;
+
+        public TwitchStreamDetector(ILogger logger, IExecutableLocator executableLocator, TwitchApiService twitchApiService)
             : base(logger, executableLocator)
         {
+            _twitchApiService = twitchApiService;
         }
 
         public override bool CanHandle(string url)
@@ -29,29 +32,52 @@ namespace Strivea.Services
             {
                 _logger.LogInformation($"Récupération des informations du stream Twitch pour : {url}");
 
-                var streamlinkPath = _executableLocator.FindExecutable("streamlink");
-                if (string.IsNullOrEmpty(streamlinkPath))
+                // Extraire le nom de la chaîne depuis l'URL
+                var channelName = ExtractChannelName(url);
+                if (string.IsNullOrEmpty(channelName))
                 {
-                    _logger.LogError("Streamlink non trouvé");
+                    _logger.LogError("Impossible d'extraire le nom de la chaîne Twitch depuis l'URL");
                     return new StreamInfo
                     {
                         ChannelName = url.Split('/').Last(),
                         StreamUrl = url,
-                        Title = "Erreur : Streamlink non trouvé",
+                        Title = "Erreur : nom de chaîne introuvable",
                         IsLive = false
                     };
                 }
 
-                // TODO: Implémenter la détection réelle avec streamlink
-                // Pour l'instant, on simule une détection
-                await Task.Delay(1000);
+                // Appel à l'API Twitch
+                var twitchInfo = await _twitchApiService.GetStreamInfoAsync(channelName);
+                if (twitchInfo == null)
+                {
+                    return new StreamInfo
+                    {
+                        ChannelName = channelName,
+                        StreamUrl = url,
+                        Title = "Stream Twitch hors ligne",
+                        IsLive = false,
+                        Platform = "Twitch"
+                    };
+                }
 
+                // Remplir StreamInfo enrichi
                 return new StreamInfo
                 {
-                    ChannelName = url.Split('/').Last(),
+                    ChannelName = twitchInfo.UserName,
                     StreamUrl = url,
-                    Title = "Stream Twitch en direct",
-                    IsLive = true
+                    Title = twitchInfo.Title,
+                    StreamTitle = twitchInfo.Title,
+                    IsLive = true,
+                    Platform = "Twitch",
+                    ChannelFolderName = twitchInfo.UserName,
+                    Quality = null, // Peut être enrichi plus tard
+                    ViewerCount = twitchInfo.ViewerCount,
+                    DetectionTime = DateTime.Now,
+                    ErrorMessage = null,
+                    // Ajout d'un champ custom pour l'ID du stream (à ajouter dans StreamInfo si besoin)
+                    // StreamId = twitchInfo.StreamId,
+                    // GameName = twitchInfo.GameName,
+                    // Language = twitchInfo.Language,
                 };
             }
             catch (Exception ex)
@@ -62,9 +88,21 @@ namespace Strivea.Services
                     ChannelName = url.Split('/').Last(),
                     StreamUrl = url,
                     Title = $"Erreur : {ex.Message}",
-                    IsLive = false
+                    IsLive = false,
+                    Platform = "Twitch"
                 };
             }
+        }
+
+        private string ExtractChannelName(string url)
+        {
+            // Exemples d'URL : https://www.twitch.tv/pokimane
+            var parts = url.Split('/', StringSplitOptions.RemoveEmptyEntries);
+            var idx = parts.ToList().FindIndex(p => p.Contains("twitch.tv"));
+            if (idx >= 0 && idx + 1 < parts.Length)
+                return parts[idx + 1];
+            // Fallback : dernier segment
+            return parts.LastOrDefault();
         }
     }
 } 

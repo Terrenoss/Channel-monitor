@@ -10,15 +10,17 @@ namespace Strivea.Services
     {
         private readonly ILogger _logger;
         private readonly IExecutableLocator _executableLocator;
+        private readonly TwitchApiService _twitchApiService;
         private readonly Dictionary<string, IStreamDetector> _detectors;
 
-        public StreamDetectorFactory(ILogger logger, IExecutableLocator executableLocator)
+        public StreamDetectorFactory(ILogger logger, IExecutableLocator executableLocator, TwitchApiService twitchApiService)
         {
             _logger = logger;
             _executableLocator = executableLocator;
+            _twitchApiService = twitchApiService;
             _detectors = new Dictionary<string, IStreamDetector>
             {
-                { "twitch", new TwitchStreamDetector(_logger, _executableLocator) },
+                { "twitch", new TwitchStreamDetector(_logger, _executableLocator, _twitchApiService) },
                 { "bilibili", new BilibiliStreamDetector(_logger, _executableLocator) },
                 { "17live", new SeventeenLiveStreamDetector(_logger, _executableLocator) },
                 { "tiktok", new TikTokLiveStreamDetector(_logger, _executableLocator) },
