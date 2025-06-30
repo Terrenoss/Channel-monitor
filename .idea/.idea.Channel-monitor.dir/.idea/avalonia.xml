@@ -3,6 +3,7 @@
   <component name="AvaloniaProject">
     <option name="projectPerEditor">
       <map>
+        <entry key="App.axaml" value="Strivea.csproj" />
         <entry key="Views/MainWindow.axaml" value="Strivea.csproj" />
         <entry key="Views/TempFilesManagerWindow.axaml" value="Strivea.csproj" />
       </map>
