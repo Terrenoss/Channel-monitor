@@ -8,6 +8,7 @@ using System.Text.RegularExpressions;
 using System.Text.Json;
 using System.Net.Http;
 using System.IO;
+using System.Collections.Concurrent;
 
 namespace Strivea.Services
 {
@@ -15,6 +16,7 @@ namespace Strivea.Services
     {
         private readonly HttpClient _httpClient;
         private const string YOUTUBE_API_KEY = "AIzaSyD_QDMrxLrUXp4QxcZLINJPB5n8d62cemA";
+        private static readonly ConcurrentDictionary<string, string> _apiCache = new();
 
         public YouTubeStreamDetector(ILogger logger, IExecutableLocator executableLocator)
             : base(logger, executableLocator)
@@ -676,6 +678,12 @@ namespace Strivea.Services
 
         private async Task<string> CallYouTubeApiAsync(string apiUrl, string operationName, int maxRetries = 2)
         {
+            // Vérifie si la réponse est déjà en cache
+            if (_apiCache.TryGetValue(apiUrl, out var cachedResponse))
+            {
+                _logger.LogInformation($"[CACHE] Utilisation de la réponse en cache pour {operationName}");
+                return cachedResponse;
+            }
             for (int attempt = 1; attempt <= maxRetries; attempt++)
             {
                 try
@@ -683,6 +691,8 @@ namespace Strivea.Services
                     _logger.LogInformation($"[API] Tentative {attempt}/{maxRetries} pour {operationName}");
                     var response = await _httpClient.GetStringAsync(apiUrl);
                     _logger.LogInformation($"[API] {operationName} réussie");
+                    // Stocke la réponse dans le cache
+                    _apiCache[apiUrl] = response;
                     return response;
                 }
                 catch (HttpRequestException ex) when (ex.Message.Contains("403"))
