@@ -87,14 +87,14 @@ namespace Strivea.Services
                 var error = await process.StandardError.ReadToEndAsync();
                 await process.WaitForExitAsync();
 
-                _logger.LogInformation($"Processus streamlink terminé avec le code : {process.ExitCode}");
+                _logger.LogInformation($"[DIAG] Processus streamlink terminé avec le code : {process.ExitCode}");
                 if (!string.IsNullOrEmpty(output))
                 {
-                    _logger.LogInformation("URL du stream récupérée avec succès");
+                    _logger.LogInformation($"[DIAG] Sortie Streamlink (JSON) : {output}");
                 }
                 if (!string.IsNullOrEmpty(error))
                 {
-                    _logger.LogInformation($"Erreur streamlink : {error}");
+                    _logger.LogWarning($"[DIAG] Erreur Streamlink : {error}");
                 }
 
                 return process.ExitCode == 0 ? output.Trim() : null;
@@ -289,14 +289,14 @@ namespace Strivea.Services
                 var error = await process.StandardError.ReadToEndAsync();
                 await process.WaitForExitAsync();
 
-                _logger.LogInformation($"Processus streamlink terminé avec le code : {process.ExitCode}");
+                _logger.LogInformation($"[DIAG] Processus streamlink terminé avec le code : {process.ExitCode}");
                 if (!string.IsNullOrEmpty(output))
                 {
-                    _logger.LogInformation($"Sortie Streamlink (JSON) : {output}");
+                    _logger.LogInformation($"[DIAG] Sortie Streamlink (JSON) : {output}");
                 }
                 if (!string.IsNullOrEmpty(error))
                 {
-                    _logger.LogWarning($"Erreur Streamlink : {error}");
+                    _logger.LogWarning($"[DIAG] Erreur Streamlink : {error}");
                 }
 
                     if (process.ExitCode == 0 && !string.IsNullOrEmpty(output))
@@ -578,7 +578,7 @@ namespace Strivea.Services
 
                 // --- Statut final : Priorité à l'API YouTube, fallback sur Streamlink ---
                 isLive = apiLiveFound || streamlinkIsLive;
-                _logger.LogInformation($"Statut final - API Live: {apiLiveFound}, Streamlink Live: {streamlinkIsLive}, Final: {isLive}");
+                _logger.LogInformation($"[DIAG] streamlinkIsLive = {streamlinkIsLive}, isLive (API) = {isLive}, apiLiveFound = {apiLiveFound}");
                 _logger.LogInformation($"StreamId final pour la concaténation : {streamId}");
 
                 return new StreamInfo

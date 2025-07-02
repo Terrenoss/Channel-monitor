@@ -16,6 +16,7 @@ using MsBox.Avalonia.Enums;
 using System.Collections.Generic;
 using System.Linq;
 using Strivea.Views;
+using Avalonia.Threading;
 
 namespace Strivea.ViewModels
 {
@@ -33,6 +34,12 @@ namespace Strivea.ViewModels
         private string _currentRecordingStats;
         private CancellationTokenSource _monitoringCts;
         private bool _isTempSectionVisible;
+        private bool _isSurveillanceActive;
+        private bool _isRecording;
+        private CancellationTokenSource _surveillanceCts;
+        private bool _liveDetectedBySurveillance;
+        private string _ignoredVideoId;
+        private bool _hasLoggedIgnoredLive = false;
 
         public MainViewModel(
             ILogger<MainViewModel> logger,
@@ -98,15 +105,37 @@ namespace Strivea.ViewModels
             }
         }
 
-        public bool CanStartMonitoring => !IsMonitoring;
-        public bool CanStopMonitoring
+        public bool IsSurveillanceActive
         {
-            get
+            get => _isSurveillanceActive;
+            set
             {
-                _logger.LogInformation($"CanStopMonitoring est évalué. IsMonitoring: {IsMonitoring}");
-                return IsMonitoring;
+                if (SetProperty(ref _isSurveillanceActive, value))
+                {
+                    StartSurveillanceCommand.NotifyCanExecuteChanged();
+                    StopSurveillanceCommand.NotifyCanExecuteChanged();
+                    StartMonitoringCommand.NotifyCanExecuteChanged();
+                }
             }
         }
+
+        public bool IsRecording
+        {
+            get => _isRecording;
+            set
+            {
+                if (SetProperty(ref _isRecording, value))
+                {
+                    StartMonitoringCommand.NotifyCanExecuteChanged();
+                    StopMonitoringCommand.NotifyCanExecuteChanged();
+                }
+            }
+        }
+
+        public bool CanStartSurveillance => !IsSurveillanceActive;
+        public bool CanStopSurveillance => IsSurveillanceActive;
+        public bool CanStartMonitoring => !IsMonitoring && !IsRecording && (!IsSurveillanceActive || !_liveDetectedBySurveillance);
+        public bool CanStopMonitoring => IsMonitoring || IsRecording;
 
         public string StatusMessage
         {
@@ -142,6 +171,18 @@ namespace Strivea.ViewModels
 
         public IRelayCommand OpenTempFilesManagerCommand { get; }
 
+        public bool LiveDetectedBySurveillance
+        {
+            get => _liveDetectedBySurveillance;
+            set
+            {
+                if (SetProperty(ref _liveDetectedBySurveillance, value))
+                {
+                    StartMonitoringCommand.NotifyCanExecuteChanged();
+                }
+            }
+        }
+
         private void AddLog(string message)
         {
             var timestamp = DateTime.Now.ToString("HH:mm:ss");
@@ -175,6 +216,105 @@ namespace Strivea.ViewModels
             }
         }
 
+        [RelayCommand(CanExecute = nameof(CanStartSurveillance))]
+        private async Task StartSurveillanceAsync()
+        {
+            if (string.IsNullOrEmpty(StreamUrl))
+            {
+                AddLog("Erreur : L'URL du stream est vide");
+                return;
+            }
+            AddLog($"Surveillance activée pour : {StreamUrl}");
+            IsSurveillanceActive = true;
+            _surveillanceCts = new CancellationTokenSource();
+            await Task.Run(async () =>
+            {
+                while (!_surveillanceCts.IsCancellationRequested)
+                {
+                    if (IsRecording)
+                    {
+                        // On ne log plus ce message pendant la conversion ou après l'arrêt
+                        await Task.Delay(30000, _surveillanceCts.Token);
+                        continue;
+                    }
+                    // On ne log "Détection du live..." que si le live n'est pas ignoré ou si l'état change
+                    if (_ignoredVideoId == null)
+                        AddLog("[Surveillance] Détection du live...");
+                    bool isLive = await _streamDetector.IsLiveAsync(StreamUrl);
+                    if (isLive && !IsRecording)
+                    {
+                        // On ne log plus ce message si le live est ignoré
+                        var streamInfo = await _streamDetector.GetStreamInfoAsync(StreamUrl);
+                        if (streamInfo != null && streamInfo.IsLive)
+                        {
+                            if (_ignoredVideoId == streamInfo.StreamId)
+                            {
+                                Avalonia.Threading.Dispatcher.UIThread.Post(() => {
+                                    LiveDetectedBySurveillance = false;
+                                });
+                                if (!_hasLoggedIgnoredLive)
+                                {
+                                    AddLog("[Surveillance] Le live actuel a été ignoré suite à un arrêt manuel, en attente d'un nouveau live.");
+                                    _hasLoggedIgnoredLive = true;
+                                }
+                                // On saute le reste de la boucle
+                                await Task.Delay(30000, _surveillanceCts.Token);
+                                continue;
+                            }
+                            _hasLoggedIgnoredLive = false;
+                            AddLog("[Surveillance] Live détecté, récupération des infos...");
+                            AddLog($"[Surveillance] Diagnostic : _ignoredVideoId = '{_ignoredVideoId}', StreamId détecté = '{streamInfo?.StreamId}'");
+                            Avalonia.Threading.Dispatcher.UIThread.Post(() => {
+                                LiveDetectedBySurveillance = true;
+                            });
+                            AddLog($"[Surveillance] Live trouvé : '{streamInfo.Title}' sur la chaîne '{streamInfo.ChannelName}'.");
+                            AddLog($"[Surveillance] Démarrage de l'enregistrement pour la chaîne '{streamInfo.ChannelName}'...");
+                            await StartMonitoringAsync();
+                        }
+                        else
+                        {
+                            Avalonia.Threading.Dispatcher.UIThread.Post(() => {
+                                LiveDetectedBySurveillance = false;
+                            });
+                            AddLog("[Surveillance] Aucun live confirmé par l'API après détection Streamlink.");
+                        }
+                        await Task.Delay(30000, _surveillanceCts.Token);
+                        continue;
+                    }
+                    else
+                    {
+                        Avalonia.Threading.Dispatcher.UIThread.Post(() => {
+                            LiveDetectedBySurveillance = false;
+                        });
+                        AddLog("[Surveillance] Aucun live détecté.");
+                    }
+                    await Task.Delay(30000, _surveillanceCts.Token);
+                }
+            }, _surveillanceCts.Token);
+        }
+
+        [RelayCommand(CanExecute = nameof(CanStopSurveillance))]
+        private async Task StopSurveillance()
+        {
+            AddLog("Surveillance arrêtée");
+            IsSurveillanceActive = false;
+            _surveillanceCts?.Cancel();
+            LiveDetectedBySurveillance = false;
+            // On tente toujours d'arrêter l'enregistrement côté service, même si l'UI pense qu'il n'y en a pas
+            if (_streamRecorder.IsRecording)
+            {
+                AddLog("[Surveillance] Arrêt de l'enregistrement en cours (fin de surveillance) côté service...");
+            }
+            else
+            {
+                AddLog("[Surveillance] Aucun enregistrement détecté côté service, on force l'arrêt pour nettoyage.");
+            }
+            await _streamRecorder.StopRecordingAsync();
+            Avalonia.Threading.Dispatcher.UIThread.Post(() => {
+                IsRecording = false;
+            });
+        }
+
         [RelayCommand(CanExecute = nameof(CanStartMonitoring))]
         private async Task StartMonitoringAsync()
         {
@@ -185,88 +325,60 @@ namespace Strivea.ViewModels
                     AddLog("Erreur : L'URL du stream est vide");
                     return;
                 }
-
-                AddLog($"Démarrage de la surveillance : {StreamUrl}");
-                AddLog($"Vérification du statut en direct pour {StreamUrl}");
-
+                AddLog($"[Enregistrement] Démarrage de l'enregistrement (vérification API directe) : {StreamUrl}");
+                Avalonia.Threading.Dispatcher.UIThread.Post(() => {
+                    IsRecording = true;
+                });
                 var streamInfo = await _streamDetector.GetStreamInfoAsync(StreamUrl);
-                if (streamInfo == null)
+                if (streamInfo == null || !streamInfo.IsLive)
                 {
-                    AddLog("Erreur : Impossible de récupérer les informations du stream");
+                    AddLog("[Enregistrement] Erreur : Aucun live détecté (API)");
+                    Avalonia.Threading.Dispatcher.UIThread.Post(() => {
+                        IsRecording = false;
+                    });
                     return;
                 }
-
-                AddLog($"État du stream : {(streamInfo.IsLive ? "En direct" : "Hors ligne")}");
-
-                if (streamInfo.IsLive)
+                // Si on reprend un live ignoré, on lève l'ignorance
+                if (_ignoredVideoId == streamInfo.StreamId)
                 {
-                    AddLog("Stream en direct détecté, démarrage de l'enregistrement...");
-                    var streamUrlResult = await _streamDetector.GetStreamUrlAsync(StreamUrl);
-                    if (string.IsNullOrEmpty(streamUrlResult))
-                    {
-                        AddLog("Erreur : Impossible de récupérer l'URL du stream");
-                        return;
-                    }
-
-                    var platform = "YouTube"; // Pour l'instant, on ne gère que YouTube
-                    var channelName = streamInfo.ChannelName;
-                    var streamTitle = streamInfo.Title;
-
-                    AddLog($"Démarrage de l'enregistrement pour {channelName} sur {platform}");
-                    AddLog($"Titre du stream : {streamTitle}");
-                    AddLog("URL du stream récupérée avec succès");
-
-                    _monitoringCts = new CancellationTokenSource();
-                    IsMonitoring = true;
+                    _ignoredVideoId = null;
+                    AddLog("[Enregistrement] Reprise manuelle de l'enregistrement du live actuel.");
+                }
+                AddLog($"[Enregistrement] Live trouvé : '{streamInfo.Title}' sur la chaîne '{streamInfo.ChannelName}'.");
+                AddLog($"[Enregistrement] Enregistrement en cours pour la chaîne '{streamInfo.ChannelName}'...");
                     await _streamRecorder.StartRecordingAsync(
-                        streamUrlResult,
-                        platform,
-                        channelName,
-                        streamTitle,
-                        _monitoringCts.Token,
+                    streamInfo.StreamUrl,
+                    streamInfo.Platform ?? "YouTube",
+                    streamInfo.ChannelName ?? "UnknownChannel",
+                    streamInfo.Title ?? "Stream en direct",
+                    CancellationToken.None,
                         streamInfo.ChannelFolderName,
                         streamInfo.StreamId
                     );
-
-                    AddLog("Surveillance démarrée avec succès");
-                }
-                else
-                {
-                    AddLog("Le stream n'est pas en direct");
-                }
             }
-            catch (Exception ex)
+            finally
             {
-                _logger.LogError(ex, "Erreur lors du démarrage de la surveillance");
-                AddLog($"Erreur : {ex.Message}");
+                // Rien ici, l'arrêt se fait ailleurs
             }
         }
 
         [RelayCommand(CanExecute = nameof(CanStopMonitoring))]
-        private async Task StopMonitoringAsync()
+        private async Task StopMonitoring()
         {
-            try
+            if (_streamRecorder != null && !string.IsNullOrEmpty(_streamRecorder.CurrentStreamId))
             {
-                AddLog("Arrêt de la surveillance...");
-                _monitoringCts?.Cancel();
-                await _streamRecorder.StopRecordingAsync();
-                AddLog("Surveillance arrêtée avec succès");
+                _ignoredVideoId = _streamRecorder.CurrentStreamId;
+                _hasLoggedIgnoredLive = false;
+                AddLog($"Arrêt manuel : le live {_ignoredVideoId} sera ignoré par la surveillance tant qu'il ne change pas.");
             }
-            catch (Exception ex)
+            else
             {
-                _logger.LogError(ex, "Erreur lors de l'arrêt de la surveillance");
-                AddLog($"Erreur lors de l'arrêt : {ex.Message}");
+                AddLog("Arrêt manuel : impossible de déterminer l'ID du live à ignorer.");
             }
-            finally
-            {
-                Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-                {
-                    IsMonitoring = false;
-                    _logger.LogInformation($"[DEBUG] IsMonitoring forcé à {IsMonitoring} dans finally StopMonitoringAsync");
-                    StartMonitoringCommand.NotifyCanExecuteChanged();
-                    StopMonitoringCommand.NotifyCanExecuteChanged();
-                });
-            }
+            await _streamRecorder.StopRecordingAsync();
+            Avalonia.Threading.Dispatcher.UIThread.Post(() => {
+                IsRecording = false;
+            });
         }
 
         [RelayCommand]

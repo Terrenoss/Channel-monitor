@@ -46,6 +46,18 @@
                     <TextBlock Text="Vérifier les dépendances"/>
                 </StackPanel>
             </Button>
+            <Button Command="{Binding StartSurveillanceCommand}">
+                <StackPanel Orientation="Horizontal" Spacing="5">
+                    <Path Data="M12,2A10,10 0 1,0 22,12A10,10 0 1,0 12,2ZM13,7H11V9H13V7ZM13,11H11V17H13V11Z" Fill="White" Width="16" Height="16" Stretch="Uniform"/>
+                    <TextBlock Text="Surveiller la chaîne"/>
+                </StackPanel>
+            </Button>
+            <Button Command="{Binding StopSurveillanceCommand}">
+                <StackPanel Orientation="Horizontal" Spacing="5">
+                    <Path Data="M6,6h12v12H6z" Fill="White" Width="16" Height="16" Stretch="Uniform"/>
+                    <TextBlock Text="Arrêter la surveillance"/>
+                </StackPanel>
+            </Button>
             <Button Command="{Binding StartMonitoringCommand}">
                 <StackPanel Orientation="Horizontal" Spacing="5">
                     <Path Data="M8,5v14l11-7z" Fill="White" Width="16" Height="16" Stretch="Uniform"/>

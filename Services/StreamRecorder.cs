@@ -16,6 +16,7 @@ namespace Strivea.Services
         Task StartRecordingAsync(string streamUrl, string platform, string channelName, string streamTitle, CancellationToken cancellationToken, string channelFolderName = null, string liveId = null);
         Task StopRecordingAsync();
         bool IsRecording { get; }
+        string CurrentStreamId { get; }
     }
 
     public class StreamRecorder : IStreamRecorder
@@ -54,6 +55,7 @@ namespace Strivea.Services
 
         public bool IsRecording => _isRecording;
         public string ChannelName => _channelName;
+        public string CurrentStreamId => _sessionId;
 
         public string SanitizeFileName(string fileName)
         {
@@ -206,6 +208,7 @@ namespace Strivea.Services
 
         private async Task ConcatAndConvertTsPartsAsync()
         {
+            _addUiLog?.Invoke("Conversion et concaténation lancées (FFmpeg) si des segments existent...");
             _setStatusMessage?.Invoke("Concaténation des segments vidéo en cours...");
             _logger.LogInformation("[CONCAT] Début de la concaténation des segments vidéo...");
             _addUiLog?.Invoke("Début de la concaténation des segments vidéo...");
@@ -221,6 +224,55 @@ namespace Strivea.Services
                 _logger.LogWarning($"Aucun fichier .ts trouvé dans {tsDir} pour la concaténation.");
                 _setStatusMessage?.Invoke("Aucun segment vidéo à concaténer.");
                 _addUiLog?.Invoke("Aucun segment vidéo à concaténer.");
+                return;
+            }
+
+            // Cas 1 seul .ts : conversion directe
+            if (tsFiles.Count == 1)
+            {
+                var tsFile = tsFiles[0];
+                var singleOutputMp4 = Path.Combine(tsDir, $"{_streamTitle}.mp4");
+                _setStatusMessage?.Invoke("Conversion directe du segment vidéo en mp4...");
+                _logger.LogInformation($"[CONCAT] Conversion directe du segment {tsFile} en mp4...");
+                _addUiLog?.Invoke("Conversion directe du segment vidéo en mp4...");
+                var ffmpegArgs = $"-i \"{tsFile}\" -c:v libx264 -c:a aac \"{singleOutputMp4}\"";
+                _logger.LogInformation($"Commande FFmpeg conversion directe : ffmpeg {ffmpegArgs}");
+                var result = await RunFfmpegAsync(ffmpegArgs, logError:true);
+                _logger.LogInformation($"FFmpeg conversion directe result: {result}");
+                if (!File.Exists(singleOutputMp4))
+                {
+                    _logger.LogError($"La conversion FFmpeg a échoué, fichier {singleOutputMp4} non trouvé. Sortie FFmpeg : {result}");
+                    _setStatusMessage?.Invoke("Erreur lors de la conversion en mp4.");
+                    _addUiLog?.Invoke("Erreur lors de la conversion en mp4.");
+                    return;
+                }
+                // Déplacement final comme avant
+                var singleChannelDir = Directory.GetParent(tsDir)?.Parent?.FullName;
+                if (!string.IsNullOrEmpty(singleChannelDir))
+                {
+                    var finalMp4 = Path.Combine(singleChannelDir, $"{_streamTitle}.mp4");
+                    if (File.Exists(finalMp4))
+                    {
+                        _logger.LogInformation($"Suppression de l'ancien finalMp4 : {finalMp4}");
+                        try { File.Delete(finalMp4); _logger.LogInformation($"Suppression réussie de {finalMp4}"); } catch (Exception ex) { _logger.LogError(ex, $"Erreur lors de la suppression de {finalMp4}"); }
+                    }
+                    try {
+                        File.Move(singleOutputMp4, finalMp4);
+                        _logger.LogInformation($"Déplacement réussi de {singleOutputMp4} vers {finalMp4}");
+                    } catch (Exception ex) {
+                        _logger.LogError(ex, $"Erreur lors du déplacement de {singleOutputMp4} vers {finalMp4}");
+                    }
+                    _logger.LogInformation($"[CONCAT] Fichier final déplacé vers : {finalMp4}");
+                    _setStatusMessage?.Invoke("Conversion terminée !");
+                    _addUiLog?.Invoke("Concaténation et conversion terminées !");
+                    _logger.LogInformation("[CONCAT] Concaténation et conversion terminées avec succès.");
+                }
+                else
+                {
+                    _logger.LogWarning($"[CONCAT] Impossible de déplacer le .mp4 final, channelDir introuvable : {tsDir}");
+                    _setStatusMessage?.Invoke("Conversion terminée, mais impossible de déplacer le fichier final.");
+                    _addUiLog?.Invoke("Conversion terminée, mais impossible de déplacer le fichier final.");
+                }
                 return;
             }
 
@@ -270,18 +322,32 @@ namespace Strivea.Services
                 }
 
             if (File.Exists(outputMp4))
-                File.Delete(outputMp4);
-            File.Move(tempMp4, outputMp4);
+            {
+                _logger.LogInformation($"Suppression de l'ancien outputMp4 : {outputMp4}");
+                try { File.Delete(outputMp4); _logger.LogInformation($"Suppression réussie de {outputMp4}"); } catch (Exception ex) { _logger.LogError(ex, $"Erreur lors de la suppression de {outputMp4}"); }
+            }
+            try {
+                File.Move(tempMp4, outputMp4);
+                _logger.LogInformation($"Déplacement réussi de {tempMp4} vers {outputMp4}");
+            } catch (Exception ex) {
+                _logger.LogError(ex, $"Erreur lors du déplacement de {tempMp4} vers {outputMp4}");
+            }
 
             var channelDir = Directory.GetParent(tsDir)?.Parent?.FullName;
             if (!string.IsNullOrEmpty(channelDir))
             {
                 var finalMp4 = Path.Combine(channelDir, $"{_streamTitle}.mp4");
-                _logger.LogInformation($"[CONCAT] Déplacement du fichier final vers : {finalMp4}");
-                _addUiLog?.Invoke($"Déplacement du fichier final vers : {Path.GetFileName(finalMp4)}");
                 if (File.Exists(finalMp4))
-                    File.Delete(finalMp4);
-                File.Move(outputMp4, finalMp4);
+                {
+                    _logger.LogInformation($"Suppression de l'ancien finalMp4 : {finalMp4}");
+                    try { File.Delete(finalMp4); _logger.LogInformation($"Suppression réussie de {finalMp4}"); } catch (Exception ex) { _logger.LogError(ex, $"Erreur lors de la suppression de {finalMp4}"); }
+                }
+                try {
+                    File.Move(outputMp4, finalMp4);
+                    _logger.LogInformation($"Déplacement réussi de {outputMp4} vers {finalMp4}");
+                } catch (Exception ex) {
+                    _logger.LogError(ex, $"Erreur lors du déplacement de {outputMp4} vers {finalMp4}");
+                }
                 _logger.LogInformation($"[CONCAT] Fichier final déplacé vers : {finalMp4}");
                 _setStatusMessage?.Invoke("Conversion terminée !");
                 _addUiLog?.Invoke("Concaténation et conversion terminées !");
@@ -305,36 +371,74 @@ namespace Strivea.Services
                 _logger.LogError("FFmpeg non trouvé");
                 throw new Exception("FFmpeg non trouvé");
             }
-                
-                var startInfo = new ProcessStartInfo
-                {
-                    FileName = ffmpegPath,
+
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = ffmpegPath,
                 Arguments = args,
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    UseShellExecute = false,
-                    CreateNoWindow = true
-                };
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
 
             using (var process = new Process { StartInfo = startInfo })
             {
                 var outputBuilder = new System.Text.StringBuilder();
                 var errorBuilder = new System.Text.StringBuilder();
+                DateTime lastOutput = DateTime.Now;
+                object lockObj = new object();
 
-                process.OutputDataReceived += (s, e) => { if (e.Data != null) outputBuilder.AppendLine(e.Data); };
-                process.ErrorDataReceived += (s, e) => { if (e.Data != null) errorBuilder.AppendLine(e.Data); };
+                process.OutputDataReceived += (s, e) =>
+                {
+                    if (e.Data != null)
+                    {
+                        lock (lockObj) { lastOutput = DateTime.Now; }
+                        outputBuilder.AppendLine(e.Data);
+                    }
+                };
+                process.ErrorDataReceived += (s, e) =>
+                {
+                    if (e.Data != null)
+                    {
+                        lock (lockObj) { lastOutput = DateTime.Now; }
+                        errorBuilder.AppendLine(e.Data);
+                    }
+                };
 
                 process.Start();
                 process.BeginOutputReadLine();
                 process.BeginErrorReadLine();
 
-                // Timeout global
-                var exited = await Task.Run(() => process.WaitForExit(30000));
-                if (!exited)
+                // Timeout d'inactivité (60s) et timeout global (30min)
+                var inactivityTimeout = TimeSpan.FromSeconds(60);
+                var globalTimeout = TimeSpan.FromMinutes(30);
+                var startTime = DateTime.Now;
+                bool exited = false;
+                while (true)
                 {
-                    _logger.LogError("FFmpeg a dépassé le temps limite et va être tué.");
-                    try { process.Kill(); } catch { }
-                    throw new Exception("FFmpeg bloqué (timeout)");
+                    await Task.Delay(1000);
+                    if (process.HasExited)
+                    {
+                        exited = true;
+                        break;
+                    }
+                    var now = DateTime.Now;
+                    lock (lockObj)
+                    {
+                        if (now - lastOutput > inactivityTimeout)
+                        {
+                            _logger.LogError("FFmpeg bloqué (aucune sortie depuis 60s), arrêt du process.");
+                            try { process.Kill(); } catch { }
+                            throw new Exception("FFmpeg bloqué (inactivité)");
+                        }
+                    }
+                    if (now - startTime > globalTimeout)
+                    {
+                        _logger.LogError("FFmpeg a dépassé le temps limite global (30min) et va être tué.");
+                        try { process.Kill(); } catch { }
+                        throw new Exception("FFmpeg bloqué (timeout global)");
+                    }
                 }
 
                 // S'assurer que toute la sortie est lue
