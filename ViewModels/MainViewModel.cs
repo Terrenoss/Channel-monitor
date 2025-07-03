@@ -20,7 +20,7 @@ using Avalonia.Threading;
 
 namespace Strivea.ViewModels
 {
-    public partial class MainViewModel : ViewModelBase
+    public partial class MainViewModel : ViewModelBase, IDisposable
     {
         private readonly ILogger<MainViewModel> _logger;
         private readonly IStreamDetector _streamDetector;
@@ -34,12 +34,14 @@ namespace Strivea.ViewModels
         private string _currentRecordingStats;
         private CancellationTokenSource _monitoringCts;
         private bool _isTempSectionVisible;
-        private bool _isSurveillanceActive;
-        private bool _isRecording;
+        private volatile bool _isSurveillanceActive;
+        private volatile bool _isRecording;
         private CancellationTokenSource _surveillanceCts;
         private bool _liveDetectedBySurveillance;
         private string _ignoredVideoId;
         private bool _hasLoggedIgnoredLive = false;
+        private readonly object _stateLock = new object();
+        private bool _disposed = false;
 
         public MainViewModel(
             ILogger<MainViewModel> logger,
@@ -110,11 +112,20 @@ namespace Strivea.ViewModels
             get => _isSurveillanceActive;
             set
             {
-                if (SetProperty(ref _isSurveillanceActive, value))
+                lock (_stateLock)
                 {
-                    StartSurveillanceCommand.NotifyCanExecuteChanged();
-                    StopSurveillanceCommand.NotifyCanExecuteChanged();
-                    StartMonitoringCommand.NotifyCanExecuteChanged();
+                    if (_isSurveillanceActive != value)
+                    {
+                        _isSurveillanceActive = value;
+                        // Notifier les changements sur le thread UI
+                        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                        {
+                            OnPropertyChanged(nameof(IsSurveillanceActive));
+                            StartSurveillanceCommand.NotifyCanExecuteChanged();
+                            StopSurveillanceCommand.NotifyCanExecuteChanged();
+                            StartMonitoringCommand.NotifyCanExecuteChanged();
+                        });
+                    }
                 }
             }
         }
@@ -124,10 +135,19 @@ namespace Strivea.ViewModels
             get => _isRecording;
             set
             {
-                if (SetProperty(ref _isRecording, value))
+                lock (_stateLock)
                 {
-                    StartMonitoringCommand.NotifyCanExecuteChanged();
-                    StopMonitoringCommand.NotifyCanExecuteChanged();
+                    if (_isRecording != value)
+                    {
+                        _isRecording = value;
+                        // Notifier les changements sur le thread UI
+                        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                        {
+                            OnPropertyChanged(nameof(IsRecording));
+                            StartMonitoringCommand.NotifyCanExecuteChanged();
+                            StopMonitoringCommand.NotifyCanExecuteChanged();
+                        });
+                    }
                 }
             }
         }
@@ -186,7 +206,20 @@ namespace Strivea.ViewModels
         private void AddLog(string message)
         {
             var timestamp = DateTime.Now.ToString("HH:mm:ss");
-            ActivityLogs.Add($"[{timestamp}] {message}");
+            var logEntry = $"[{timestamp}] {message}";
+            
+            // Utiliser le dispatcher UI pour ajouter des logs de manière thread-safe
+            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+            {
+                ActivityLogs.Add(logEntry);
+                
+                // Limiter le nombre de logs pour éviter la croissance mémoire
+                const int MAX_LOGS = 1000;
+                while (ActivityLogs.Count > MAX_LOGS)
+                {
+                    ActivityLogs.RemoveAt(0); // Supprimer le plus ancien
+                }
+            });
         }
 
         [RelayCommand]
@@ -219,6 +252,8 @@ namespace Strivea.ViewModels
         [RelayCommand(CanExecute = nameof(CanStartSurveillance))]
         private async Task StartSurveillanceAsync()
         {
+            ThrowIfDisposed();
+            
             if (string.IsNullOrEmpty(StreamUrl))
             {
                 AddLog("Erreur : L'URL du stream est vide");
@@ -229,66 +264,91 @@ namespace Strivea.ViewModels
             _surveillanceCts = new CancellationTokenSource();
             await Task.Run(async () =>
             {
-                while (!_surveillanceCts.IsCancellationRequested)
+                try
                 {
-                    if (IsRecording)
+                    while (!_surveillanceCts.IsCancellationRequested)
                     {
-                        // On ne log plus ce message pendant la conversion ou après l'arrêt
-                        await Task.Delay(30000, _surveillanceCts.Token);
-                        continue;
-                    }
-                    // On ne log "Détection du live..." que si le live n'est pas ignoré ou si l'état change
-                    if (_ignoredVideoId == null)
-                        AddLog("[Surveillance] Détection du live...");
-                    bool isLive = await _streamDetector.IsLiveAsync(StreamUrl);
-                    if (isLive && !IsRecording)
-                    {
-                        // On ne log plus ce message si le live est ignoré
-                        var streamInfo = await _streamDetector.GetStreamInfoAsync(StreamUrl);
-                        if (streamInfo != null && streamInfo.IsLive)
+                        bool isCurrentlyRecording;
+                        lock (_stateLock)
                         {
-                            if (_ignoredVideoId == streamInfo.StreamId)
+                            isCurrentlyRecording = _isRecording;
+                        }
+                        
+                        if (isCurrentlyRecording)
+                        {
+                            // On ne log plus ce message pendant la conversion ou après l'arrêt
+                            await Task.Delay(30000, _surveillanceCts.Token);
+                            continue;
+                        }
+                        // On ne log "Détection du live..." que si le live n'est pas ignoré ou si l'état change
+                        if (_ignoredVideoId == null)
+                            AddLog("[Surveillance] Détection du live...");
+                        bool isLive = await _streamDetector.IsLiveAsync(StreamUrl);
+                        
+                        lock (_stateLock)
+                        {
+                            isCurrentlyRecording = _isRecording;
+                        }
+                        
+                        if (isLive && !isCurrentlyRecording)
+                        {
+                            // On ne log plus ce message si le live est ignoré
+                            var streamInfo = await _streamDetector.GetStreamInfoAsync(StreamUrl);
+                            if (streamInfo != null && streamInfo.IsLive)
+                            {
+                                if (_ignoredVideoId == streamInfo.StreamId)
+                                {
+                                    Avalonia.Threading.Dispatcher.UIThread.Post(() => {
+                                        LiveDetectedBySurveillance = false;
+                                    });
+                                    if (!_hasLoggedIgnoredLive)
+                                    {
+                                        AddLog("[Surveillance] Le live actuel a été ignoré suite à un arrêt manuel, en attente d'un nouveau live.");
+                                        _hasLoggedIgnoredLive = true;
+                                    }
+                                    // On saute le reste de la boucle
+                                    await Task.Delay(30000, _surveillanceCts.Token);
+                                    continue;
+                                }
+                                _hasLoggedIgnoredLive = false;
+                                AddLog("[Surveillance] Live détecté, récupération des infos...");
+                                AddLog($"[Surveillance] Diagnostic : _ignoredVideoId = '{_ignoredVideoId}', StreamId détecté = '{streamInfo?.StreamId}'");
+                                Avalonia.Threading.Dispatcher.UIThread.Post(() => {
+                                    LiveDetectedBySurveillance = true;
+                                });
+                                AddLog($"[Surveillance] Live trouvé : '{streamInfo.Title}' sur la chaîne '{streamInfo.ChannelName}'.");
+                                AddLog($"[Surveillance] Démarrage de l'enregistrement pour la chaîne '{streamInfo.ChannelName}'...");
+                                await StartMonitoringAsync();
+                            }
+                            else
                             {
                                 Avalonia.Threading.Dispatcher.UIThread.Post(() => {
                                     LiveDetectedBySurveillance = false;
                                 });
-                                if (!_hasLoggedIgnoredLive)
-                                {
-                                    AddLog("[Surveillance] Le live actuel a été ignoré suite à un arrêt manuel, en attente d'un nouveau live.");
-                                    _hasLoggedIgnoredLive = true;
-                                }
-                                // On saute le reste de la boucle
-                                await Task.Delay(30000, _surveillanceCts.Token);
-                                continue;
+                                AddLog("[Surveillance] Aucun live confirmé par l'API après détection Streamlink.");
                             }
-                            _hasLoggedIgnoredLive = false;
-                            AddLog("[Surveillance] Live détecté, récupération des infos...");
-                            AddLog($"[Surveillance] Diagnostic : _ignoredVideoId = '{_ignoredVideoId}', StreamId détecté = '{streamInfo?.StreamId}'");
-                            Avalonia.Threading.Dispatcher.UIThread.Post(() => {
-                                LiveDetectedBySurveillance = true;
-                            });
-                            AddLog($"[Surveillance] Live trouvé : '{streamInfo.Title}' sur la chaîne '{streamInfo.ChannelName}'.");
-                            AddLog($"[Surveillance] Démarrage de l'enregistrement pour la chaîne '{streamInfo.ChannelName}'...");
-                            await StartMonitoringAsync();
+                            await Task.Delay(30000, _surveillanceCts.Token);
+                            continue;
                         }
                         else
                         {
                             Avalonia.Threading.Dispatcher.UIThread.Post(() => {
                                 LiveDetectedBySurveillance = false;
                             });
-                            AddLog("[Surveillance] Aucun live confirmé par l'API après détection Streamlink.");
+                            AddLog("[Surveillance] Aucun live détecté.");
                         }
                         await Task.Delay(30000, _surveillanceCts.Token);
-                        continue;
                     }
-                    else
-                    {
-                        Avalonia.Threading.Dispatcher.UIThread.Post(() => {
-                            LiveDetectedBySurveillance = false;
-                        });
-                        AddLog("[Surveillance] Aucun live détecté.");
-                    }
-                    await Task.Delay(30000, _surveillanceCts.Token);
+                }
+                catch (TaskCanceledException)
+                {
+                    _logger.LogInformation("Surveillance annulée proprement.");
+                    AddLog("Surveillance arrêtée proprement.");
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Erreur inattendue dans la surveillance");
+                    AddLog($"Erreur inattendue dans la surveillance : {ex.Message}");
                 }
             }, _surveillanceCts.Token);
         }
@@ -296,6 +356,8 @@ namespace Strivea.ViewModels
         [RelayCommand(CanExecute = nameof(CanStopSurveillance))]
         private async Task StopSurveillance()
         {
+            ThrowIfDisposed();
+            
             AddLog("Surveillance arrêtée");
             IsSurveillanceActive = false;
             _surveillanceCts?.Cancel();
@@ -310,14 +372,14 @@ namespace Strivea.ViewModels
                 AddLog("[Surveillance] Aucun enregistrement détecté côté service, on force l'arrêt pour nettoyage.");
             }
             await _streamRecorder.StopRecordingAsync();
-            Avalonia.Threading.Dispatcher.UIThread.Post(() => {
-                IsRecording = false;
-            });
+            IsRecording = false;
         }
 
         [RelayCommand(CanExecute = nameof(CanStartMonitoring))]
         private async Task StartMonitoringAsync()
         {
+            ThrowIfDisposed();
+            
             try
             {
                 if (string.IsNullOrEmpty(StreamUrl))
@@ -326,16 +388,12 @@ namespace Strivea.ViewModels
                     return;
                 }
                 AddLog($"[Enregistrement] Démarrage de l'enregistrement (vérification API directe) : {StreamUrl}");
-                Avalonia.Threading.Dispatcher.UIThread.Post(() => {
-                    IsRecording = true;
-                });
+                IsRecording = true;
                 var streamInfo = await _streamDetector.GetStreamInfoAsync(StreamUrl);
                 if (streamInfo == null || !streamInfo.IsLive)
                 {
                     AddLog("[Enregistrement] Erreur : Aucun live détecté (API)");
-                    Avalonia.Threading.Dispatcher.UIThread.Post(() => {
-                        IsRecording = false;
-                    });
+                    IsRecording = false;
                     return;
                 }
                 // Si on reprend un live ignoré, on lève l'ignorance
@@ -356,19 +414,23 @@ namespace Strivea.ViewModels
                         streamInfo.StreamId
                     );
             }
-            finally
+            catch (Exception ex)
             {
-                // Rien ici, l'arrêt se fait ailleurs
+                _logger.LogError(ex, "Erreur lors du démarrage de l'enregistrement");
+                AddLog($"Erreur lors du démarrage de l'enregistrement : {ex.Message}");
+                IsRecording = false;
             }
         }
 
         [RelayCommand(CanExecute = nameof(CanStopMonitoring))]
         private async Task StopMonitoring()
         {
+            ThrowIfDisposed();
+            
             if (_streamRecorder != null && !string.IsNullOrEmpty(_streamRecorder.CurrentStreamId))
             {
                 _ignoredVideoId = _streamRecorder.CurrentStreamId;
-                _hasLoggedIgnoredLive = false;
+                _hasLoggedIgnoredLive = true; // On considère le live comme ignoré immédiatement
                 AddLog($"Arrêt manuel : le live {_ignoredVideoId} sera ignoré par la surveillance tant qu'il ne change pas.");
             }
             else
@@ -376,8 +438,13 @@ namespace Strivea.ViewModels
                 AddLog("Arrêt manuel : impossible de déterminer l'ID du live à ignorer.");
             }
             await _streamRecorder.StopRecordingAsync();
-            Avalonia.Threading.Dispatcher.UIThread.Post(() => {
-                IsRecording = false;
+            IsRecording = false;
+            // Mise à jour immédiate de l'état pour réactiver le bouton Démarrer
+            LiveDetectedBySurveillance = false;
+            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+            {
+                OnPropertyChanged(nameof(CanStartMonitoring));
+                StartMonitoringCommand.NotifyCanExecuteChanged();
             });
         }
 
@@ -438,7 +505,7 @@ namespace Strivea.ViewModels
                     Directory.CreateDirectory(tempDir);
 
                     AddLog($"Suppression terminée : {total} éléments supprimés dans Temp.");
-                    RefreshTempFolders();
+                    await RefreshTempFoldersAsync();
                 }
                 else
                 {
@@ -453,24 +520,56 @@ namespace Strivea.ViewModels
         }
 
         [RelayCommand]
+        public async Task RefreshTempFoldersAsync()
+        {
+            try
+            {
+                TempFoldersWithTs.Clear();
+                var recordingsRoot = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+                    "Strivea",
+                    "Recordings");
+                
+                if (!Directory.Exists(recordingsRoot)) return;
+                
+                // Rendre la recherche asynchrone pour ne pas bloquer l'UI
+                await Task.Run(() =>
+                {
+                    var tempDirs = Directory.GetDirectories(recordingsRoot, "Temp", SearchOption.AllDirectories);
+                    var foldersWithTs = new List<string>();
+                    
+                    foreach (var dir in tempDirs)
+                    {
+                        // Recherche récursive de tous les .ts dans Temp et ses sous-dossiers
+                        var tsFiles = Directory.GetFiles(dir, "*.ts", SearchOption.AllDirectories);
+                        if (tsFiles.Any())
+                        {
+                            foldersWithTs.Add(dir);
+                        }
+                    }
+                    
+                    // Mettre à jour l'UI sur le thread principal
+                    Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                    {
+                        TempFoldersWithTs.Clear();
+                        foreach (var folder in foldersWithTs)
+                        {
+                            TempFoldersWithTs.Add(folder);
+                        }
+                    });
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Erreur lors du rafraîchissement des dossiers temporaires");
+                AddLog($"Erreur lors du rafraîchissement : {ex.Message}");
+            }
+        }
+
         public void RefreshTempFolders()
         {
-            TempFoldersWithTs.Clear();
-            var recordingsRoot = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
-                "Strivea",
-                "Recordings");
-            if (!Directory.Exists(recordingsRoot)) return;
-            var tempDirs = Directory.GetDirectories(recordingsRoot, "Temp", SearchOption.AllDirectories);
-            foreach (var dir in tempDirs)
-            {
-                // Recherche récursive de tous les .ts dans Temp et ses sous-dossiers
-                var tsFiles = Directory.GetFiles(dir, "*.ts", SearchOption.AllDirectories);
-                if (tsFiles.Any())
-                {
-                    TempFoldersWithTs.Add(dir);
-                }
-            }
+            // Méthode synchrone pour la compatibilité, mais elle appelle la version asynchrone
+            _ = RefreshTempFoldersAsync();
         }
 
         [RelayCommand]
@@ -502,16 +601,41 @@ namespace Strivea.ViewModels
                 int dirCount = Directory.GetDirectories(tempDir, "*", SearchOption.AllDirectories).Length;
                 int total = fileCount + dirCount;
 
+                // Supprimer le dossier et le recréer
                 Directory.Delete(tempDir, true);
+                
+                // Vérifier que la suppression a réussi
+                if (Directory.Exists(tempDir))
+                {
+                    throw new IOException($"Impossible de supprimer complètement le dossier {tempDir}");
+                }
+                
+                // Recréer le dossier vide
                 Directory.CreateDirectory(tempDir);
+                
+                // Vérifier que la création a réussi
+                if (!Directory.Exists(tempDir))
+                {
+                    throw new IOException($"Impossible de recréer le dossier {tempDir}");
+                }
 
                 AddLog($"Suppression terminée : {total} éléments supprimés dans Temp.");
-                RefreshTempFolders();
+                await RefreshTempFoldersAsync();
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Erreur lors du nettoyage des fichiers temporaires");
                 AddLog($"Erreur lors du nettoyage : {ex.Message}");
+                
+                // Vérifier l'état du dossier après erreur
+                if (Directory.Exists(tempDir))
+                {
+                    AddLog("Le dossier Temp existe toujours. Vérifiez manuellement son contenu.");
+                }
+                else
+                {
+                    AddLog("Le dossier Temp a été supprimé mais n'a pas pu être recréé.");
+                }
             }
         }
 
@@ -533,7 +657,7 @@ namespace Strivea.ViewModels
 
         private async void OpenTempFilesManager()
         {
-            RefreshTempFolders();
+            await RefreshTempFoldersAsync();
             var window = new TempFilesManagerWindow();
             window.DataContext = this;
             if (App.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop)
@@ -579,6 +703,101 @@ namespace Strivea.ViewModels
             if (match.Success)
                 return match.Groups[1].Value;
             return null;
+        }
+
+        private void ThrowIfDisposed()
+        {
+            if (_disposed)
+            {
+                throw new ObjectDisposedException(nameof(MainViewModel));
+            }
+        }
+
+        public void Dispose()
+        {
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+
+        protected virtual void Dispose(bool disposing)
+        {
+            if (!_disposed && disposing)
+            {
+                try
+                {
+                    // Arrêter la surveillance
+                    _surveillanceCts?.Cancel();
+                    _surveillanceCts?.Dispose();
+                    
+                    // Arrêter le monitoring
+                    _monitoringCts?.Cancel();
+                    _monitoringCts?.Dispose();
+                    
+                    // Arrêter l'enregistrement et disposer le StreamRecorder
+                    if (_streamRecorder != null)
+                    {
+                        try
+                        {
+                            if (_streamRecorder.IsRecording)
+                            {
+                                _streamRecorder.StopRecordingAsync().Wait(5000); // 5 secondes max
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger?.LogWarning(ex, "Erreur lors de l'arrêt de l'enregistrement lors du dispose");
+                        }
+                        finally
+                        {
+                            _streamRecorder.Dispose();
+                        }
+                    }
+                    
+                    // Disposer le StreamDetector
+                    if (_streamDetector is IDisposable disposableDetector)
+                    {
+                        try
+                        {
+                            disposableDetector.Dispose();
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger?.LogWarning(ex, "Erreur lors du dispose du StreamDetector");
+                        }
+                    }
+                    
+                    // Disposer les autres services si disponibles
+                    var serviceProvider = App.ServiceProvider;
+                    if (serviceProvider != null)
+                    {
+                        try
+                        {
+                            var executableLocator = serviceProvider.GetService<IExecutableLocator>() as IDisposable;
+                            executableLocator?.Dispose();
+                            
+                            var statsLogger = serviceProvider.GetService<RecordingStatsLogger>() as IDisposable;
+                            statsLogger?.Dispose();
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger?.LogWarning(ex, "Erreur lors du dispose des services");
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger?.LogError(ex, "Erreur lors du dispose de MainViewModel");
+                }
+                finally
+                {
+                    _disposed = true;
+                }
+            }
+        }
+
+        ~MainViewModel()
+        {
+            Dispose(false);
         }
     }
 }

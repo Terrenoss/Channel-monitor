@@ -11,7 +11,7 @@ using System.Collections.Generic;
 
 namespace Strivea.Services
 {
-    public interface IStreamRecorder
+    public interface IStreamRecorder : IDisposable
     {
         Task StartRecordingAsync(string streamUrl, string platform, string channelName, string streamTitle, CancellationToken cancellationToken, string channelFolderName = null, string liveId = null);
         Task StopRecordingAsync();
@@ -38,6 +38,7 @@ namespace Strivea.Services
         private readonly Action<string> _addUiLog;
         private string _sessionId;
         private string _sessionTempDir;
+        private bool _disposed = false;
 
         public StreamRecorder(
             ILogger<StreamRecorder> logger,
@@ -69,6 +70,8 @@ namespace Strivea.Services
 
         public async Task StartRecordingAsync(string streamUrl, string platform, string channelName, string streamTitle, CancellationToken cancellationToken, string channelFolderName = null, string liveId = null)
         {
+            ThrowIfDisposed();
+            
             try
             {
                 if (_isRecording)
@@ -154,6 +157,8 @@ namespace Strivea.Services
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Erreur lors du démarrage de l'enregistrement");
+                // Nettoyer en cas d'erreur
+                await CleanupResourcesAsync();
                 throw;
             }
         }
@@ -201,8 +206,36 @@ namespace Strivea.Services
             }
             finally
             {
+                await CleanupResourcesAsync();
+            }
+        }
+
+        private async Task CleanupResourcesAsync()
+        {
+            try
+            {
                 _cancellationTokenSource?.Dispose();
                 _cancellationTokenSource = null;
+                
+                if (_recordingProcess != null && !_recordingProcess.HasExited)
+                {
+                    try
+                    {
+                        _recordingProcess.Kill();
+                        await _recordingProcess.WaitForExitAsync();
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Erreur lors de l'arrêt du processus d'enregistrement");
+                    }
+                }
+                
+                _recordingProcess?.Dispose();
+                _recordingProcess = null;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Erreur lors du nettoyage des ressources");
             }
         }
 
@@ -414,30 +447,59 @@ namespace Strivea.Services
                 var inactivityTimeout = TimeSpan.FromSeconds(60);
                 var globalTimeout = TimeSpan.FromMinutes(30);
                 var startTime = DateTime.Now;
-                bool exited = false;
-                while (true)
+                
+                // Utiliser un CancellationTokenSource pour gérer les timeouts
+                using (var timeoutCts = new CancellationTokenSource())
                 {
-                    await Task.Delay(1000);
-                    if (process.HasExited)
+                    // Créer une tâche pour surveiller l'inactivité
+                    var inactivityTask = Task.Run(async () =>
                     {
-                        exited = true;
-                        break;
-                    }
-                    var now = DateTime.Now;
-                    lock (lockObj)
-                    {
-                        if (now - lastOutput > inactivityTimeout)
+                        while (!timeoutCts.Token.IsCancellationRequested)
                         {
-                            _logger.LogError("FFmpeg bloqué (aucune sortie depuis 60s), arrêt du process.");
-                            try { process.Kill(); } catch { }
-                            throw new Exception("FFmpeg bloqué (inactivité)");
+                            await Task.Delay(1000, timeoutCts.Token);
+                            lock (lockObj)
+                            {
+                                if (DateTime.Now - lastOutput > inactivityTimeout)
+                                {
+                                    _logger.LogError("FFmpeg bloqué (aucune sortie depuis 60s), arrêt du process.");
+                                    timeoutCts.Cancel();
+                                    break;
+                                }
+                            }
+                        }
+                    }, timeoutCts.Token);
+
+                    // Créer une tâche pour le timeout global
+                    var globalTimeoutTask = Task.Delay(globalTimeout, timeoutCts.Token);
+
+                    // Attendre que FFmpeg se termine ou qu'un timeout se déclenche
+                    try
+                    {
+                        await Task.WhenAny(
+                            process.WaitForExitAsync(),
+                            globalTimeoutTask
+                        );
+
+                        if (!process.HasExited)
+                        {
+                            _logger.LogError("FFmpeg a dépassé le temps limite global (30min) et va être tué.");
+                            process.Kill();
+                            await process.WaitForExitAsync();
                         }
                     }
-                    if (now - startTime > globalTimeout)
+                    catch (OperationCanceledException)
                     {
-                        _logger.LogError("FFmpeg a dépassé le temps limite global (30min) et va être tué.");
-                        try { process.Kill(); } catch { }
-                        throw new Exception("FFmpeg bloqué (timeout global)");
+                        // Timeout d'inactivité déclenché
+                        if (!process.HasExited)
+                        {
+                            process.Kill();
+                            await process.WaitForExitAsync();
+                        }
+                        throw new Exception("FFmpeg bloqué (inactivité)");
+                    }
+                    finally
+                    {
+                        timeoutCts.Cancel(); // Arrêter la tâche de surveillance
                     }
                 }
 
@@ -463,6 +525,61 @@ namespace Strivea.Services
 
                 return output + (string.IsNullOrWhiteSpace(error) ? "" : "\n[stderr]\n" + error);
             }
+        }
+
+        private void ThrowIfDisposed()
+        {
+            if (_disposed)
+            {
+                throw new ObjectDisposedException(nameof(StreamRecorder));
+            }
+        }
+
+        public void Dispose()
+        {
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+
+        protected virtual void Dispose(bool disposing)
+        {
+            if (!_disposed && disposing)
+            {
+                try
+                {
+                    // Nettoyer les ressources de manière synchrone
+                    _cancellationTokenSource?.Cancel();
+                    _cancellationTokenSource?.Dispose();
+                    
+                    if (_recordingProcess != null && !_recordingProcess.HasExited)
+                    {
+                        try
+                        {
+                            _recordingProcess.Kill();
+                            _recordingProcess.WaitForExit(5000); // 5 secondes max
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger?.LogWarning(ex, "Erreur lors de l'arrêt du processus d'enregistrement lors du dispose");
+                        }
+                    }
+                    
+                    _recordingProcess?.Dispose();
+                }
+                catch (Exception ex)
+                {
+                    _logger?.LogError(ex, "Erreur lors du dispose de StreamRecorder");
+                }
+                finally
+                {
+                    _disposed = true;
+                }
+            }
+        }
+
+        ~StreamRecorder()
+        {
+            Dispose(false);
         }
     }
 } 

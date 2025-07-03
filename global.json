@@ -1,0 +1,14 @@
+{
+  "sdk": {
+    "version": "8.0.0",
+    "rollForward": "latestMajor",
+    "allowPrerelease": false
+  },
+  "msbuild-sdks": {
+    "Microsoft.NET.Sdk": "8.0.0"
+  },
+  "runtimeOptions": {
+    "rollForward": "latestMajor",
+    "rollForwardToPreRelease": false
+  }
+} 

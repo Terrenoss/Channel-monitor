@@ -26,7 +26,6 @@ public partial class App : Application
     public override void Initialize()
     {
         Log.Information("Démarrage de l'application...");
-        File.AppendAllText("startup.log", "Initialisation de l'application...\n");
         AvaloniaXamlLoader.Load(this);
     }
 
@@ -35,7 +34,6 @@ public partial class App : Application
         try
         {
             Log.Information("Initialisation du framework terminée...");
-            File.AppendAllText("startup.log", "Initialisation du framework terminée...\n");
 
             var services = new ServiceCollection();
             
@@ -63,12 +61,10 @@ public partial class App : Application
                 )
             );
 
-            Debug.WriteLine("Construction du conteneur DI...");
-            File.AppendAllText("startup.log", "Construction du conteneur DI...\n");
+            Log.Information("Construction du conteneur DI...");
             _serviceProvider = services.BuildServiceProvider();
 
-            Debug.WriteLine("Création de la fenêtre principale...");
-            File.AppendAllText("startup.log", "Création de la fenêtre principale...\n");
+            Log.Information("Création de la fenêtre principale...");
             
             if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
             {
@@ -77,8 +73,7 @@ public partial class App : Application
                     DataContext = _serviceProvider.GetRequiredService<MainViewModel>()
                 };
                 
-                Debug.WriteLine("Fenêtre principale créée");
-                File.AppendAllText("startup.log", "Fenêtre principale créée\n");
+                Log.Information("Fenêtre principale créée");
             }
 
             Log.Information("Application démarrée avec succès");
@@ -86,7 +81,6 @@ public partial class App : Application
         catch (Exception ex)
         {
             Log.Fatal(ex, "Erreur fatale : {Message}", ex.Message);
-            File.WriteAllText("error.log", $"Erreur fatale : {ex}");
             throw;
         }
 

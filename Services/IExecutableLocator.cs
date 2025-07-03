@@ -1,7 +1,10 @@
+using System;
+
 namespace Strivea.Services
 {
-    public interface IExecutableLocator
+    public interface IExecutableLocator : IDisposable
     {
         string FindExecutable(string executableName);
+        bool IsExecutableInstalled(string executableName);
     }
 } 

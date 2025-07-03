@@ -12,11 +12,20 @@ using System.Collections.Concurrent;
 
 namespace Strivea.Services
 {
-    public class YouTubeStreamDetector : BaseStreamDetector
+    public class YouTubeStreamDetector : BaseStreamDetector, IDisposable
     {
         private readonly HttpClient _httpClient;
         private const string YOUTUBE_API_KEY = "AIzaSyD_QDMrxLrUXp4QxcZLINJPB5n8d62cemA";
-        private static readonly ConcurrentDictionary<string, string> _apiCache = new();
+        private static readonly ConcurrentDictionary<string, CachedApiResponse> _apiCache = new();
+        private const int MAX_CACHE_SIZE = 100; // Limite du cache
+        private const int CACHE_EXPIRATION_MINUTES = 30; // Expiration en minutes
+        private bool _disposed = false;
+
+        private class CachedApiResponse
+        {
+            public string Response { get; set; }
+            public DateTime Timestamp { get; set; }
+        }
 
         public YouTubeStreamDetector(ILogger logger, IExecutableLocator executableLocator)
             : base(logger, executableLocator)
@@ -678,12 +687,24 @@ namespace Strivea.Services
 
         private async Task<string> CallYouTubeApiAsync(string apiUrl, string operationName, int maxRetries = 2)
         {
+            // Nettoyer le cache expiré
+            CleanupExpiredCache();
+            
             // Vérifie si la réponse est déjà en cache
             if (_apiCache.TryGetValue(apiUrl, out var cachedResponse))
             {
-                _logger.LogInformation($"[CACHE] Utilisation de la réponse en cache pour {operationName}");
-                return cachedResponse;
+                if (IsCacheValid(cachedResponse))
+                {
+                    _logger.LogInformation($"[CACHE] Utilisation de la réponse en cache pour {operationName}");
+                    return cachedResponse.Response;
+                }
+                else
+                {
+                    // Supprimer l'entrée expirée
+                    _apiCache.TryRemove(apiUrl, out _);
+                }
             }
+            
             for (int attempt = 1; attempt <= maxRetries; attempt++)
             {
                 try
@@ -691,8 +712,21 @@ namespace Strivea.Services
                     _logger.LogInformation($"[API] Tentative {attempt}/{maxRetries} pour {operationName}");
                     var response = await _httpClient.GetStringAsync(apiUrl);
                     _logger.LogInformation($"[API] {operationName} réussie");
-                    // Stocke la réponse dans le cache
-                    _apiCache[apiUrl] = response;
+                    
+                    // Stocke la réponse dans le cache avec limite de taille
+                    var newCachedResponse = new CachedApiResponse
+                    {
+                        Response = response,
+                        Timestamp = DateTime.Now
+                    };
+                    
+                    // Gérer la limite de taille du cache
+                    if (_apiCache.Count >= MAX_CACHE_SIZE)
+                    {
+                        RemoveOldestCacheEntry();
+                    }
+                    
+                    _apiCache[apiUrl] = newCachedResponse;
                     return response;
                 }
                 catch (HttpRequestException ex) when (ex.Message.Contains("403"))
@@ -732,6 +766,81 @@ namespace Strivea.Services
                 }
             }
             return null;
+        }
+
+        private void CleanupExpiredCache()
+        {
+            var expiredKeys = _apiCache
+                .Where(kvp => !IsCacheValid(kvp.Value))
+                .Select(kvp => kvp.Key)
+                .ToList();
+
+            foreach (var key in expiredKeys)
+            {
+                _apiCache.TryRemove(key, out _);
+            }
+
+            if (expiredKeys.Count > 0)
+            {
+                _logger.LogDebug($"[CACHE] {expiredKeys.Count} entrées expirées supprimées du cache");
+            }
+        }
+
+        private bool IsCacheValid(CachedApiResponse cachedResponse)
+        {
+            return DateTime.Now - cachedResponse.Timestamp < TimeSpan.FromMinutes(CACHE_EXPIRATION_MINUTES);
+        }
+
+        private void RemoveOldestCacheEntry()
+        {
+            var oldestEntry = _apiCache
+                .OrderBy(kvp => kvp.Value.Timestamp)
+                .FirstOrDefault();
+
+            if (!string.IsNullOrEmpty(oldestEntry.Key))
+            {
+                _apiCache.TryRemove(oldestEntry.Key, out _);
+                _logger.LogDebug("[CACHE] Plus ancienne entrée supprimée pour libérer de l'espace");
+            }
+        }
+
+        private void ThrowIfDisposed()
+        {
+            if (_disposed)
+            {
+                throw new ObjectDisposedException(nameof(YouTubeStreamDetector));
+            }
+        }
+
+        public void Dispose()
+        {
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+
+        protected virtual void Dispose(bool disposing)
+        {
+            if (!_disposed && disposing)
+            {
+                try
+                {
+                    _httpClient?.Dispose();
+                    _apiCache.Clear();
+                }
+                catch (Exception ex)
+                {
+                    _logger?.LogError(ex, "Erreur lors du dispose de YouTubeStreamDetector");
+                }
+                finally
+                {
+                    _disposed = true;
+                }
+            }
+        }
+
+        ~YouTubeStreamDetector()
+        {
+            Dispose(false);
         }
     }
 } 
